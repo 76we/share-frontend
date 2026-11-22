@@ -1,0 +1,403 @@
+/* ============================================================
+   src/style.css —— 尘叙阁（CHEN XU PAVILION）
+   暗色玄幻仙侠风全局样式
+   - 纯黑背景 + 两道径向光晕（fixed）
+   - 毛玻璃卡片、细腻白色系描边
+   - 字体：ZCOOL XiaoWei（正文）/ Ma Shan Zheng（毛笔大标题）
+   - Element Plus 暗色主题变量覆盖
+   ============================================================ */
+
+/* ---------- 基础重置与全局变量 ----------
+   风格基调：清冷月白水墨 + 深灰卡片（参考「北境论坛」的通透层次感），
+   保留印章 / 菱形纹 / 卷帙等尘叙阁主题符号，强调金降饱和转为「月白清金」。 */
+:root {
+  /* 冷白主色体系（略带冷青调） */
+  --nr-white: #f2f4f7;
+  --nr-white-soft: #d5dae1;
+  /* 文字层级：主 / 次 / 更淡 */
+  --txt-1: rgba(244, 247, 251, 0.94);
+  --txt-2: rgba(224, 231, 240, 0.58);
+  --txt-3: rgba(216, 225, 238, 0.38);
+  /* 深灰水墨卡片（实色，零逐帧毛玻璃开销；冷灰比纯黑更有层次） */
+  --card-bg: rgba(29, 33, 40, 0.86);
+  --card-bg-solid: rgba(28, 32, 39, 0.88);
+  --card-bg-deep-solid: rgba(21, 25, 31, 0.94);
+  --card-border: rgba(216, 226, 240, 0.13);
+  --card-border-hover: rgba(216, 226, 240, 0.3);
+  /* 统一圆角：大圆角卡片 + 柔和控件 */
+  --radius-card: 14px;
+  --radius-ctrl: 9px;
+  --radius-sm: 6px;
+  /* 输入框 / 填充 */
+  --fill: rgba(220, 230, 244, 0.05);
+  /* 功能色 */
+  --c-ok: #7fd4d4;      /* 成功 / 点赞：淡青 */
+  --c-danger: #f56c6c;  /* 违规 / 删除 */
+  --c-gold: #ded9cb;    /* 月白清金：淡金降饱和，更清雅契合水墨 */
+  --c-gold-dim: rgba(222, 217, 203, 0.55); /* 清金弱化 */
+  --c-gold-faint: rgba(222, 217, 203, 0.14); /* 清金极淡（描边/底纹） */
+  /* 字体 */
+  --font-body: 'ZCOOL XiaoWei', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-brush: 'Ma Shan Zheng', cursive;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100vh;
+}
+
+/* ---------- 暗黑主题背景：纯黑 + 两道径向光晕，fixed ---------- */
+html,
+body {
+  font-family: var(--font-body);
+  color: var(--txt-1);
+  background-color: #0a0c10;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(150, 175, 205, 0.07), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 85% 110%, rgba(120, 150, 185, 0.045), transparent 70%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Element Plus 暗色适配（CSS 变量覆盖，作用于 html.dark） ---------- */
+html.dark {
+  --el-bg-color: #0f0f0f;
+  --el-bg-color-overlay: #1a1a1a;
+  --el-text-color-primary: rgba(255, 255, 255, 0.92);
+  --el-text-color-regular: rgba(255, 255, 255, 0.75);
+  --el-text-color-secondary: rgba(255, 255, 255, 0.55);
+  --el-border-color: rgba(255, 255, 255, 0.15);
+  --el-border-color-light: rgba(255, 255, 255, 0.12);
+  --el-border-color-lighter: rgba(255, 255, 255, 0.08);
+  --el-fill-color-blank: transparent;
+  --el-fill-color-light: rgba(255, 255, 255, 0.06);
+  --el-fill-color: rgba(255, 255, 255, 0.04);
+  --el-fill-color-lighter: rgba(255, 255, 255, 0.04);
+  --el-color-primary: #f5f5f5;
+  --el-mask-color: rgba(0, 0, 0, 0.7);
+  --el-color-success: var(--c-ok);
+  --el-color-danger: var(--c-danger);
+}
+
+/* ---------- 通用卡片 ----------
+   性能说明：原使用 backdrop-filter 毛玻璃，滚动时每张卡片每帧都要
+   采样并模糊背后内容（首页 12+ 张卡片 = 巨大 GPU/CPU 开销）。
+   背景图已预先烘焙压暗，改用实色背景视觉几乎无差别，零逐帧模糊。 */
+.nr-card {
+  background: var(--card-bg-solid);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  transition: border-color 0.25s ease;
+}
+.nr-card:hover {
+  border-color: var(--card-border-hover);
+}
+.nr-card-deep {
+  background: var(--card-bg-deep-solid);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+}
+
+/* ---------- 登录卡片（登录页使用） ---------- */
+.stage-card {
+  width: 100%;
+  max-width: 440px;
+  padding: 56px 44px 44px;
+  text-align: center;
+  background: var(--card-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(222, 217, 203, 0.04);
+}
+
+/* 标题下分隔线 */
+.divider {
+  width: 120px;
+  height: 1px;
+  margin: 20px auto 16px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.45) 30%,
+    rgba(255, 255, 255, 0.45) 70%,
+    transparent
+  );
+}
+
+/* ---------- 表单区 ---------- */
+.form-area {
+  margin-top: 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 磨砂输入框：穿透 el-input / el-textarea 的 wrapper 与 inner
+   （style.css 是全局样式，不用 :deep，直接后代选择器） */
+.form-area .el-input__wrapper,
+.form-area .el-textarea__inner,
+.nr-form .el-input__wrapper,
+.nr-form .el-textarea__inner {
+  background: var(--fill);
+  box-shadow: 0 0 0 1px var(--card-border) inset;
+  border-radius: var(--radius-ctrl);
+  transition: box-shadow 0.25s ease;
+}
+.form-area .el-input__wrapper:hover,
+.nr-form .el-input__wrapper:hover {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+}
+.form-area .el-input__wrapper.is-focus,
+.nr-form .el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6) inset, 0 0 14px rgba(255, 255, 255, 0.08);
+}
+.form-area .el-input__inner,
+.nr-form .el-input__inner {
+  color: var(--txt-1);
+  letter-spacing: 2px;
+}
+.form-area .el-input__inner::placeholder,
+.nr-form .el-input__inner::placeholder {
+  color: var(--txt-3);
+  letter-spacing: 3px;
+}
+.form-area .el-textarea__inner,
+.nr-form .el-textarea__inner {
+  color: var(--txt-1);
+}
+.form-area .el-textarea__inner::placeholder,
+.nr-form .el-textarea__inner::placeholder {
+  color: var(--txt-3);
+}
+
+/* 下拉框（el-select）暗色填充 */
+.el-select__wrapper {
+  background: var(--fill);
+  box-shadow: 0 0 0 1px var(--card-border) inset;
+  border-radius: var(--radius-ctrl);
+}
+.el-select__placeholder {
+  color: var(--txt-2);
+}
+
+/* ---------- 主按钮：白描边冷白系 ---------- */
+.submit-btn {
+  width: 100%;
+  margin-top: 8px;
+  height: 46px;
+  background: var(--nr-white-soft);
+  border: none;
+  border-radius: var(--radius-ctrl);
+  color: #14171c;
+  letter-spacing: 8px;
+  text-indent: 8px;
+  font-size: 15px;
+  font-family: var(--font-body);
+  transition: background 0.25s ease, opacity 0.25s ease, box-shadow 0.25s ease;
+}
+.submit-btn:hover,
+.submit-btn:focus {
+  background: #ffffff;
+  color: #14171c;
+  box-shadow: 0 6px 22px rgba(222, 217, 203, 0.18);
+}
+.submit-btn:disabled {
+  opacity: 0.5;
+}
+
+/* 登录 / 注册 切换文字链 */
+.switch-link {
+  margin-top: 24px;
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: var(--txt-3);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s ease;
+}
+.switch-link:hover {
+  color: var(--txt-1);
+}
+
+/* ---------- 提示文字（element-plus message 覆盖） ---------- */
+.el-message {
+  font-family: var(--font-body);
+  letter-spacing: 2px;
+}
+
+/* ---------- 滚动条：暗色细条 ---------- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============================================================
+   动效层：渐变文字流动 / 打字光标 / 入场淡入
+   ============================================================ */
+
+/* ---------- ① 渐变文字流动（用于毛笔大字 Logo） ---------- */
+/* 用渐变填充文字，再让 background-position 循环移动，形成光在字里流过 */
+.flow-text {
+  background: linear-gradient(
+    100deg,
+    #ffffff 0%,
+    var(--c-gold) 25%,
+    #ffffff 45%,
+    #cfd8e8 65%,
+    #ffffff 85%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: textFlow 5s linear infinite;
+}
+@keyframes textFlow {
+  0%   { background-position: 200% 50%; }
+  100% { background-position: -100% 50%; }
+}
+
+/* ---------- ② 打字机光标（闪烁竖线） ---------- */
+.type-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin-left: 3px;
+  vertical-align: -0.15em;
+  background: var(--c-gold);
+  animation: cursorBlink 1s step-end infinite;
+}
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
+/* ---------- ③ 入场动画：淡入 + 轻微上浮 ---------- */
+/* 标题、副标题、分隔线依次错开出现，营造徐徐展开的意境 */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.stage-card .form-area   { animation: fadeInUp 0.9s ease-out 0.6s both; }
+
+/* ---------- ④ 首页大标题入场（若首页用到 flow-text 也通用） ---------- */
+.hero-title.flow-text {
+  animation: fadeInUp 1s ease-out both, textFlow 5s linear infinite;
+}
+
+/* ---------- 尊重“减少动态效果”的系统偏好 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .flow-text,
+  .type-cursor,
+  .stage-card .form-area,
+  .hero-title.flow-text {
+    animation: none !important;
+  }
+}
+
+/* ============================================================
+   高级感装饰件：印章 / 菱形纹 / 卡片微光（登录后页面共用）
+   ============================================================ */
+
+/* ---------- 印章徽标：淡金细描边方印，内嵌毛笔字 ---------- */
+.seal {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  font-family: var(--font-brush);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--c-gold);
+  border: 1px solid var(--c-gold-dim);
+  background: linear-gradient(135deg, rgba(232, 217, 181, 0.10), rgba(232, 217, 181, 0.02));
+  box-shadow: inset 0 0 12px rgba(232, 217, 181, 0.06), 0 0 18px rgba(232, 217, 181, 0.05);
+  position: relative;
+  flex: none;
+}
+/* 印章四角的细小缺口，模拟篆刻质感 */
+.seal::before,
+.seal::after {
+  content: '';
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-color: var(--c-gold);
+  border-style: solid;
+  opacity: 0.5;
+}
+.seal::before {
+  top: -1px; left: -1px;
+  border-width: 1px 0 0 1px;
+}
+.seal::after {
+  bottom: -1px; right: -1px;
+  border-width: 0 1px 1px 0;
+}
+.seal-sm {
+  width: 30px;
+  height: 30px;
+  font-size: 16px;
+}
+
+/* ---------- 菱形分隔纹：两侧细线 + 中间菱形 ---------- */
+.ornament {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--c-gold-dim);
+}
+.ornament::before,
+.ornament::after {
+  content: '';
+  height: 1px;
+  width: 64px;
+  background: linear-gradient(90deg, transparent, var(--c-gold-dim));
+}
+.ornament::after {
+  background: linear-gradient(90deg, var(--c-gold-dim), transparent);
+}
+.ornament-diamond {
+  width: 6px;
+  height: 6px;
+  transform: rotate(45deg);
+  border: 1px solid var(--c-gold-dim);
+}
+
+/* ---------- 卡片 hover 微光：叠加在 nr-card 上，边缘泛淡金 ---------- */
+.nr-glow {
+  transition: transform 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+}
+.nr-glow:hover {
+  transform: translateY(-4px);
+  border-color: var(--card-border-hover);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(222, 217, 203, 0.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nr-glow,
+  .nr-glow:hover {
+    transition: none;
+    transform: none;
+  }
+}
+

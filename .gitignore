@@ -1,0 +1,21 @@
+# 依赖目录
+node_modules
+
+# 构建产物
+dist
+
+# 编辑器 / 系统文件
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.local
+
+# 日志
+npm-debug.log*
+
+# 临时下载 / 测试素材（未被源码引用）
+bili_full.mp4
+bili_pl.json
+f1.jpg
+f2.jpg
