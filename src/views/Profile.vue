@@ -21,6 +21,17 @@
           </div>
           <div class="hero-actions">
             <template v-if="isOther">
+              <el-button
+                class="friend-btn"
+                :class="{ sent: friendState !== 'none' }"
+                :disabled="friendRequesting || friendState !== 'none'"
+                @click="applyFriend"
+              >
+                <template v-if="friendState === 'friend'">已是好友</template>
+                <template v-else-if="friendState === 'sent'">已申请</template>
+                <template v-else-if="friendRequesting">申请中…</template>
+                <template v-else>申请好友</template>
+              </el-button>
               <el-button class="wall-btn" @click="router.push(`/photowall/${targetUserId}`)">TA 的照片墙</el-button>
             </template>
             <template v-else>
@@ -173,6 +184,7 @@ import {
   getMyMoments, getMyLikes, getMyCollects,
   getUserProfile, getUserMoments,
 } from '../utils/profileApi'
+import { myFriends, sentRequests, requestFriend } from '../utils/friendshipApi'
 
 const router = useRouter()
 const route = useRoute()
@@ -187,6 +199,47 @@ function meId() {
     return Number(payload.sub)
   } catch (e) {
     return null
+  }
+}
+
+/* ---------------- 好友状态（他人主页） ---------------- */
+// friendState: none(可申请) | sent(我已申请) | friend(已是好友)
+const friendState = ref('none')
+const friendRequesting = ref(false)
+
+async function checkFriendState() {
+  if (!isOther.value) return
+  const me = meId()
+  const target = targetUserId.value
+  if (!me || !target) {
+    friendState.value = 'none'
+    return
+  }
+  try {
+    // 一次查好友列表判断是否已好友；再查我发出的申请
+    const [friends, sent] = await Promise.all([myFriends(), sentRequests()])
+    if (friends.some((f) => f.id === target)) {
+      friendState.value = 'friend'
+    } else if (sent.some((f) => f.id === target)) {
+      friendState.value = 'sent'
+    } else {
+      friendState.value = 'none'
+    }
+  } catch (e) {
+    friendState.value = 'none'
+  }
+}
+
+async function applyFriend() {
+  if (friendState.value !== 'none' || friendRequesting.value) return
+  friendRequesting.value = true
+  try {
+    await requestFriend(targetUserId.value)
+    friendState.value = 'sent'
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    friendRequesting.value = false
   }
 }
 
@@ -364,14 +417,17 @@ onMounted(() => {
   activeTab.value = 'moments'
   fetchProfile()
   fetchList(true)
+  checkFriendState()
 })
 
 // 在同一组件内从 TA 的主页切换到另一个 TA 时重新加载
 watch(targetUserId, () => {
   if (!localStorage.getItem('token')) return
   activeTab.value = 'moments'
+  friendState.value = 'none'
   fetchProfile()
   fetchList(true)
+  checkFriendState()
 })
 </script>
 
@@ -477,6 +533,16 @@ watch(targetUserId, () => {
 .hero-actions .wall-btn {
   border-color: var(--c-gold-dim);
   color: var(--c-gold);
+}
+.hero-actions .friend-btn {
+  border-color: var(--c-gold-dim);
+  color: var(--c-gold);
+  background: rgba(232, 217, 181, 0.06);
+}
+.hero-actions .friend-btn.sent {
+  opacity: 0.55;
+  cursor: default;
+  background: transparent;
 }
 .hero-actions .el-button:hover,
 .hero-actions .el-button:focus {

@@ -24,6 +24,12 @@
       <!-- 私密墙提示（访问 TA 的私密墙，或加载出错） -->
       <div v-if="denied" class="wall-state">
         <p class="wall-empty-text">🔒 {{ denied }}</p>
+        <button
+          v-if="canApplyFriend && !friendRequested"
+          class="wall-login-btn"
+          @click="applyFriend"
+        >申请添加 TA 为好友</button>
+        <p v-else-if="friendRequested" class="wall-friend-note">好友申请已发出，等待 TA 同意后即可查看</p>
         <button class="wall-login-btn" @click="goMyWall">看看我的照片墙</button>
       </div>
 
@@ -67,17 +73,19 @@
       <!-- 我的相册：照片墙的手动整理层 -->
       <AlbumManager v-if="mode === 'albums'" />
 
-      <!-- 可见性开关（仅自己的墙显示） -->
+      <!-- 可见性开关（仅自己的墙显示）：三档 私密 / 仅好友 / 公开 -->
       <div v-if="!isOther && mode === 'mine'" class="visibility-row">
         <span class="visibility-label">谁可以看我的照片墙</span>
         <button
+          v-for="v in [0, 2, 1]"
+          :key="v"
           class="visibility-toggle"
-          :class="{ public: visibility === 1 }"
-          @click="toggleVisibility"
+          :class="{ active: visibility === v }"
+          @click="pickVisibility(v)"
           :disabled="visibilitySaving"
         >
           <span class="visibility-dot"></span>
-          {{ visibilitySaving ? '保存中…' : (visibility === 1 ? '公开 · 他人可访问' : '私密 · 仅自己可见') }}
+          {{ v === 0 ? '私密' : v === 2 ? '仅好友' : '公开' }}
         </button>
       </div>
 
@@ -194,6 +202,7 @@ import {
   getMyPhotosGrouped, getAnniversaryPhotosGrouped, getOtherPhotosGrouped,
   getYearPhotosGrouped, getPhotoWallVisibility, setPhotoWallVisibility,
 } from '../utils/photoWallApi'
+import { requestFriend } from '../utils/friendshipApi'
 import LikeButton from '../components/LikeButton.vue'
 import AlbumManager from '../components/AlbumManager.vue'
 
@@ -216,9 +225,12 @@ const emptyHint = computed(() => ({
 }[mode.value] || '还没有照片，发一条带图动态吧'))
 const loading = ref(false)
 const denied = ref('')                   // 访问他人私密墙时的提示
+// 仅"仅好友"档被拒时，申请好友才有用（私密档加了好友也看不到）
+const canApplyFriend = computed(() => denied.value.includes('好友'))
 
-const visibility = ref(0)                // 0私密 1公开
+const visibility = ref(0)                // 0私密 1公开 2仅好友
 const visibilitySaving = ref(false)
+const friendRequested = ref(false)       // 向 TA 发起过好友申请
 
 const lightboxOpen = ref(false)
 const lightboxIndex = ref(0)
@@ -324,17 +336,28 @@ async function fetchVisibility() {
   } catch (e) { /* 静默，失败时按私密展示 */ }
 }
 
-async function toggleVisibility() {
-  if (visibilitySaving.value) return
+async function pickVisibility(v) {
+  if (visibilitySaving.value || v === visibility.value) return
   visibilitySaving.value = true
-  const next = visibility.value === 1 ? 0 : 1
   try {
-    const res = await setPhotoWallVisibility(next)
-    if (res?.code === 200) visibility.value = next
+    const res = await setPhotoWallVisibility(v)
+    if (res?.code === 200) visibility.value = v
   } catch (e) {
     // 拦截器已弹提示
   } finally {
     visibilitySaving.value = false
+  }
+}
+
+async function applyFriend() {
+  if (!isOther.value || friendRequested.value) return
+  friendRequested.value = true
+  try {
+    await requestFriend(routeUserId.value)
+    // 申请成功后刷新一下（可能已同意则能看到墙）
+    fetchPhotos()
+  } catch (e) {
+    friendRequested.value = false
   }
 }
 
@@ -515,16 +538,24 @@ onBeforeUnmount(() => {
 }
 .visibility-toggle:hover:not(:disabled) { border-color: var(--c-gold-dim); }
 .visibility-toggle:disabled { opacity: 0.6; cursor: default; }
-.visibility-toggle.public { color: var(--c-gold); border-color: var(--c-gold-dim); }
+.visibility-toggle.active { color: var(--c-gold); border-color: var(--c-gold-dim); background: rgba(232, 217, 181, 0.06); }
 .visibility-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--txt-3);
 }
-.visibility-toggle.public .visibility-dot {
+.visibility-toggle.active .visibility-dot {
   background: var(--c-gold);
   box-shadow: 0 0 8px var(--c-gold);
+}
+/* 访问他人墙被拒时的申请好友提示 */
+.wall-friend-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--c-gold-dim);
+  text-align: center;
 }
 
 /* ---------- 年度回忆：年份选择 ---------- */
