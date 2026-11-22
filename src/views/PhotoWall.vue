@@ -42,9 +42,26 @@
         >那年今日</button>
         <button
           class="wall-tab"
+          :class="{ active: mode === 'year' }"
+          @click="switchMode('year')"
+        >年度回忆</button>
+        <button
+          class="wall-tab"
           :class="{ active: mode === 'albums' }"
           @click="switchMode('albums')"
         >我的相册</button>
+      </div>
+
+      <!-- 年度回忆：年份选择 -->
+      <div v-if="!isOther && mode === 'year'" class="year-picker">
+        <span class="year-picker-label">选择年份</span>
+        <button
+          v-for="y in availableYears"
+          :key="y"
+          class="year-chip"
+          :class="{ active: selectedYear === y }"
+          @click="selectYear(y)"
+        >{{ y }}</button>
       </div>
 
       <!-- 我的相册：照片墙的手动整理层 -->
@@ -73,7 +90,7 @@
 
       <!-- 空状态 -->
       <div v-else-if="groups.length === 0" class="wall-state">
-        <p class="wall-empty-text">{{ mode === 'anniversary' ? '往年今日，尚无留影' : '还没有照片，发一条带图动态吧' }}</p>
+        <p class="wall-empty-text">{{ emptyHint }}</p>
         <router-link v-if="mode === 'mine'" to="/publish" class="wall-login-btn">去发布</router-link>
       </div>
 
@@ -175,7 +192,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getMyPhotosGrouped, getAnniversaryPhotosGrouped, getOtherPhotosGrouped,
-  getPhotoWallVisibility, setPhotoWallVisibility,
+  getYearPhotosGrouped, getPhotoWallVisibility, setPhotoWallVisibility,
 } from '../utils/photoWallApi'
 import LikeButton from '../components/LikeButton.vue'
 import AlbumManager from '../components/AlbumManager.vue'
@@ -184,8 +201,19 @@ const route = useRoute()
 const router = useRouter()
 
 const logged = ref(!!localStorage.getItem('token'))
-const mode = ref('mine')                 // mine | anniversary | albums
+const mode = ref('mine')                 // mine | anniversary | year | albums
 const groups = ref([])                   // 按月分区：[{ year, month, label, count, photos }]
+
+// 年度回忆：当前年往前 6 年可选
+const currentYear = new Date().getFullYear()
+const availableYears = Array.from({ length: 6 }, (_, i) => currentYear - i)
+const selectedYear = ref(currentYear)
+
+const emptyHint = computed(() => ({
+  anniversary: '往年今日，尚无留影',
+  year: `${selectedYear.value} 年，尚未留下光影`,
+  albums: '还没有相册',
+}[mode.value] || '还没有照片，发一条带图动态吧'))
 const loading = ref(false)
 const denied = ref('')                   // 访问他人私密墙时的提示
 
@@ -274,8 +302,12 @@ async function fetchPhotos() {
       }
       data = res?.data !== undefined ? res.data : res
     } else {
-      const loader = mode.value === 'anniversary' ? getAnniversaryPhotosGrouped : getMyPhotosGrouped
-      data = await loader()
+      if (mode.value === 'year') {
+        data = await getYearPhotosGrouped(selectedYear.value)
+      } else {
+        const loader = mode.value === 'anniversary' ? getAnniversaryPhotosGrouped : getMyPhotosGrouped
+        data = await loader()
+      }
     }
     groups.value = Array.isArray(data) ? data : []
   } catch (e) {
@@ -315,6 +347,13 @@ function switchMode(next) {
   mode.value = next
   closeLightbox()
   if (next !== 'albums') fetchPhotos()
+}
+
+function selectYear(year) {
+  if (selectedYear.value === year) return
+  selectedYear.value = year
+  closeLightbox()
+  fetchPhotos()
 }
 
 function openLightbox(index) {
@@ -486,6 +525,41 @@ onBeforeUnmount(() => {
 .visibility-toggle.public .visibility-dot {
   background: var(--c-gold);
   box-shadow: 0 0 8px var(--c-gold);
+}
+
+/* ---------- 年度回忆：年份选择 ---------- */
+.year-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 18px 0 6px;
+}
+.year-picker-label {
+  font-family: var(--font-brush);
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: var(--c-gold-dim);
+  margin-right: 6px;
+}
+.year-chip {
+  font-family: var(--font-body);
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--txt-2);
+  background: transparent;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  padding: 6px 16px;
+  cursor: pointer;
+  transition: color .2s, border-color .2s, background .2s;
+}
+.year-chip:hover { color: var(--c-gold); border-color: var(--c-gold-dim); }
+.year-chip.active {
+  color: var(--c-gold);
+  border-color: var(--c-gold);
+  background: rgba(222, 217, 181, 0.08);
 }
 
 /* ---------- 月份导航 ---------- */

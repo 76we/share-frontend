@@ -7,6 +7,7 @@ import Publish from '../views/Publish.vue'
 import Detail from '../views/Detail.vue'
 import Profile from '../views/Profile.vue'
 import PhotoWall from '../views/PhotoWall.vue'
+import Topic from '../views/Topic.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -24,8 +25,11 @@ const router = createRouter({
     { path: '/publish', component: Publish },
     // 动态详情（含评论树）
     { path: '/detail/:id', component: Detail },
-    // 个人中心
+    // 话题详情
+    { path: '/topic/:id', component: Topic },
+    // 个人中心：不带参数为我的主页，带 userId 为 TA 的主页
     { path: '/profile', component: Profile },
+    { path: '/profile/:userId', component: Profile },
     // 照片墙：不带参数为我的墙，带 userId 为访问 TA 的墙
     { path: '/photowall', component: PhotoWall },
     { path: '/photowall/:userId', component: PhotoWall },

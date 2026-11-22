@@ -88,7 +88,7 @@
             class="topic-item"
             :class="{ active: topicId === t.id }"
             @click="pickTopic(t.id)"
-          ><i class="topic-dot"></i><span>{{ t.name }}</span></span>
+          ><i class="topic-dot"></i><span class="topic-name-text">{{ t.name }}</span><span class="topic-enter" title="进入话题页" @click.stop="router.push(`/topic/${t.id}`)">›</span></span>
         </nav>
       </div>
     </aside>
@@ -149,7 +149,7 @@
           <span class="card-index">{{ idx + 1 < 10 ? '0' + (idx + 1) : idx + 1 }}</span>
 
           <!-- 作者：头像 + 昵称 + 时间（点进 TA 的照片墙） -->
-          <div class="moment-author author-link" :title="'看看 ' + (m.nickname || 'TA') + ' 的照片墙'" @click.stop="goWall(m.userId)">
+          <div class="moment-author author-link" :title="'看看 ' + (m.nickname || 'TA') + ' 的主页'" @click.stop="goWall(m.userId)">
             <span class="avatar-ring">
               <img class="avatar" :src="imgUrl(m.avatar)" alt="avatar" />
             </span>
@@ -573,10 +573,10 @@ function preview(card, i) {
   window.open(imgUrl(card.images?.[i]), '_blank')
 }
 
-/* ---------------- 进入作者照片墙 ---------------- */
+/* ---------------- 进入作者主页 ---------------- */
 function goWall(userId) {
   if (userId == null) return
-  router.push(`/photowall/${userId}`)
+  router.push(`/profile/${userId}`)
 }
 
 /* ---------------- 时间格式化 ---------------- */
@@ -1022,6 +1022,17 @@ onBeforeUnmount(() => {
   background: var(--c-gold);
   box-shadow: 0 0 8px rgba(232, 217, 181, 0.5);
 }
+.topic-name-text { flex: 1; min-width: 0; }
+.topic-enter {
+  flex: none;
+  font-size: 17px;
+  line-height: 1;
+  color: var(--txt-3);
+  opacity: 0;
+  transition: opacity .2s, color .2s;
+}
+.topic-item:hover .topic-enter { opacity: 1; }
+.topic-enter:hover { color: var(--c-gold); }
 
 /* ---------- 中栏：应用场景卷首（静态，避免重复动画与开销） ----------
    与左右栏顶部卡片采用同一套方框语言，使三栏顶部齐整贴合 */

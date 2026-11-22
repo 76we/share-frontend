@@ -20,8 +20,14 @@
             <p class="hero-joined" v-if="profile.createTime">入阁 · {{ joinDate }}</p>
           </div>
           <div class="hero-actions">
-            <el-button class="edit-btn" @click="openEdit">编辑资料</el-button>
-            <el-button class="pwd-btn" @click="openPassword">修改密码</el-button>
+            <template v-if="isOther">
+              <el-button class="wall-btn" @click="router.push(`/photowall/${targetUserId}`)">TA 的照片墙</el-button>
+            </template>
+            <template v-else>
+              <el-button class="wall-btn" @click="router.push('/photowall')">我的照片墙</el-button>
+              <el-button class="edit-btn" @click="openEdit">编辑资料</el-button>
+              <el-button class="pwd-btn" @click="openPassword">修改密码</el-button>
+            </template>
           </div>
         </div>
 
@@ -107,7 +113,7 @@
             <span class="seal empty-seal">空</span>
             <p class="empty-title">{{ emptyText }}</p>
             <p class="empty-sub">尘间尚有留白，静待落笔成叙</p>
-            <button v-if="activeTab === 'moments'" class="empty-clear" @click="router.push('/publish')">去发布</button>
+            <button v-if="!isOther && activeTab === 'moments'" class="empty-clear" @click="router.push('/publish')">去发布</button>
           </div>
         </div>
       </section>
@@ -157,17 +163,32 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import LikeButton from '../components/LikeButton.vue'
 import CollectButton from '../components/CollectButton.vue'
 import {
   getMyProfile, updateMyProfile, changeMyPassword,
   getMyMoments, getMyLikes, getMyCollects,
+  getUserProfile, getUserMoments,
 } from '../utils/profileApi'
 
 const router = useRouter()
+const route = useRoute()
+
+/* ---------------- 视角：我的 / TA 的 ---------------- */
+const targetUserId = computed(() => route.params.userId ? Number(route.params.userId) : null)
+const isOther = computed(() => targetUserId.value !== null && targetUserId.value !== meId())
+function meId() {
+  try {
+    const token = localStorage.getItem('token') || ''
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return Number(payload.sub)
+  } catch (e) {
+    return null
+  }
+}
 
 /* ---------------- 资料与统计 ---------------- */
 const profile = ref({})
@@ -183,11 +204,13 @@ const joinDate = computed(() => {
 })
 
 /* ---------------- 标签页与列表 ---------------- */
-const tabs = [
+const myTabs = [
   { key: 'moments', label: '我的发布' },
   { key: 'likes', label: '我点赞' },
   { key: 'collects', label: '我收藏' },
 ]
+const otherTabs = [{ key: 'moments', label: 'TA 的发布' }]
+const tabs = computed(() => (isOther.value ? otherTabs : myTabs))
 const activeTab = ref('moments')
 const list = ref([])
 const loading = ref(false)
@@ -195,21 +218,20 @@ const page = ref(1)
 const size = 10
 const hasMore = ref(false)
 
-const emptyText = computed(() => ({
-  moments: '尚未发布任何故事',
-  likes: '还没有点赞过任何故事',
-  collects: '还没有收藏过任何故事',
-}[activeTab.value]))
-
-const fetchers = {
-  moments: getMyMoments,
-  likes: getMyLikes,
-  collects: getMyCollects,
-}
+const emptyText = computed(() => {
+  if (isOther.value) return 'TA 尚未发布任何故事'
+  return {
+    moments: '尚未发布任何故事',
+    likes: '还没有点赞过任何故事',
+    collects: '还没有收藏过任何故事',
+  }[activeTab.value]
+})
 
 async function fetchProfile() {
   try {
-    profile.value = await getMyProfile() || {}
+    profile.value = isOther.value
+      ? (await getUserProfile(targetUserId.value) || {})
+      : (await getMyProfile() || {})
   } catch (err) {
     // 统一拦截器已提示
   }
@@ -222,7 +244,13 @@ async function fetchList(reset = true) {
   }
   loading.value = true
   try {
-    const data = await fetchers[activeTab.value](page.value, size) || {}
+    let data
+    if (isOther.value) {
+      data = await getUserMoments(targetUserId.value, page.value, size) || {}
+    } else {
+      const fetcher = { moments: getMyMoments, likes: getMyLikes, collects: getMyCollects }[activeTab.value]
+      data = await fetcher(page.value, size) || {}
+    }
     list.value = reset ? (data.records ?? []) : [...list.value, ...(data.records ?? [])]
     hasMore.value = data.current < data.pages
   } catch (err) {
@@ -333,6 +361,15 @@ onMounted(() => {
     router.push('/login')
     return
   }
+  activeTab.value = 'moments'
+  fetchProfile()
+  fetchList(true)
+})
+
+// 在同一组件内从 TA 的主页切换到另一个 TA 时重新加载
+watch(targetUserId, () => {
+  if (!localStorage.getItem('token')) return
+  activeTab.value = 'moments'
   fetchProfile()
   fetchList(true)
 })
@@ -436,6 +473,10 @@ onMounted(() => {
   color: var(--txt-2);
   letter-spacing: 2px;
   margin: 0;
+}
+.hero-actions .wall-btn {
+  border-color: var(--c-gold-dim);
+  color: var(--c-gold);
 }
 .hero-actions .el-button:hover,
 .hero-actions .el-button:focus {

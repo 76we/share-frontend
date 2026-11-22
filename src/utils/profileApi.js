@@ -42,3 +42,13 @@ export function getMyLikes(page = 1, size = 10) {
 export function getMyCollects(page = 1, size = 10) {
   return axios.get(`${BASE}/collects`, { params: { page, size } }).then((res) => res.data?.data)
 }
+
+/** TA 的资料 + 统计（对外视角，已屏蔽邮箱） */
+export function getUserProfile(userId) {
+  return axios.get(`${BASE}/user/${userId}`).then((res) => res.data?.data)
+}
+
+/** TA 发布的动态（分页） */
+export function getUserMoments(userId, page = 1, size = 10) {
+  return axios.get(`${BASE}/user/${userId}/moments`, { params: { page, size } }).then((res) => res.data?.data)
+}

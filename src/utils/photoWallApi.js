@@ -57,3 +57,8 @@ export function getAnniversaryPhotosGrouped() {
 export function getOtherPhotosGrouped(userId) {
   return axios.get(`${BASE}/user/${userId}/groups`).then((res) => res.data?.data)
 }
+
+/** 年度回忆册：某年照片按月分组 */
+export function getYearPhotosGrouped(year) {
+  return axios.get(`${BASE}/year/${year}/groups`).then((res) => res.data?.data)
+}
