@@ -5,12 +5,9 @@
   <div class="home-wrap">
     <!-- ==================== 首屏入场：星尘粒子 + 视频 + 左右分栏（幻梦风） ==================== -->
     <section class="entry-hero" ref="heroSection">
-      <div class="entry-video-wrap" aria-hidden="true">
-        <video ref="entryVideo" class="entry-video" autoplay loop muted playsinline preload="metadata">
-          <source src="/chenxu-bg.mp4" type="video/mp4" />
-        </video>
-        <div class="entry-video-mask"></div>
-      </div>
+      <!-- 水墨动态壁纸（替代原 chenxu-bg.mp4：那个视频 8.67MB 且无商用授权）
+           滚出视口后由 heroPaused 暂停全部图层动画，省电不占 GPU -->
+      <InkBackdrop class="entry-backdrop" src="/ink-mist.jpg" :dim="0.55" :paused="heroPaused" />
       <!-- 星尘 / 萤火 / 流星粒子层（纯 Canvas，离屏自动暂停） -->
       <canvas ref="particleCanvas" class="entry-particles" aria-hidden="true"></canvas>
 
@@ -55,6 +52,13 @@
         </button>
       </div>
     </section>
+
+    <!-- 每日一诗：横贯横幅（古风毛玻璃试水层，随页面滚动，不固定） -->
+    <div class="verse-strip" aria-label="今日诗句">
+      <span class="verse-strip-mark">今 日</span>
+      <p class="verse-strip-text">{{ dailyVerse }}</p>
+      <span class="verse-strip-sign">尘叙阁 · 一言</span>
+    </div>
 
     <!-- ==================== 应用场景：三栏信息流 ==================== -->
     <div class="home" ref="sceneRef">
@@ -120,7 +124,17 @@
           <button type="submit" class="search-submit">搜</button>
         </form>
         <div class="toolbar-right">
-          <span class="toolbar-count">{{ keyword ? `“${keyword}” · ${total} 篇` : `共 ${total} 篇` }}</span>
+          <span class="toolbar-count">{{ keyword ? `“${keyword}” · ${total} 篇` : friendOnly ? `朋友动态 · ${total} 篇` : `共 ${total} 篇` }}</span>
+          <!-- 只看朋友开关：登录后显示，走 /moments/friends（朋友+我） -->
+          <button
+            v-if="logged"
+            class="friend-toggle"
+            :class="{ active: friendOnly }"
+            @click="toggleFriendOnly"
+            title="只看朋友"
+          >
+            <span class="friend-toggle-dot"></span>只看朋友
+          </button>
           <div class="sort-group">
             <span
               class="sort-item"
@@ -242,17 +256,31 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import LikeButton from '../components/LikeButton.vue'
 import CollectButton from '../components/CollectButton.vue'
+import InkBackdrop from '../components/InkBackdrop.vue'
 import { useVerseTyper } from '../utils/useVerseTyper'
 
 const router = useRouter()
 
-/* ---------------- 首屏入场：粒子 + 视频 + 向下探索 ---------------- */
-const entryVideo = ref(null)
+/* ---------------- 每日一诗（横幅文案，按自然日轮换） ---------------- */
+const VERSES = [
+  '且将浮生事，说与晚风听',
+  '尘世一隅，叙说心事',
+  '山河旧梦，皆可落笔',
+  '一壶浊酒，两袖清风',
+  '愿你在此，寻一卷共鸣',
+  '旧事不必提，晚风自会带远',
+  '人间烟火气，最抚凡人心',
+]
+const dailyVerse = computed(() => VERSES[Math.floor(Date.now() / 86400000) % VERSES.length])
+
+/* ---------------- 首屏入场：水墨壁纸 + 粒子 + 向下探索 ---------------- */
+// 滚出视口后置 true，暂停壁纸图层动画（原来是暂停视频解码）
+const heroPaused = ref(false)
 const heroSection = ref(null)
 const particleCanvas = ref(null)
 const sceneRef = ref(null)
@@ -392,6 +420,10 @@ const { typed: typedVerse } = useVerseTyper()
 const topicId = ref(0)
 const sort = ref('new')
 const topics = ref([])
+// 只看朋友开关：开启且无搜索词时走 /moments/friends（朋友+我发布的动态）
+const friendOnly = ref(false)
+// 是否已登录（只有登录态才能"只看朋友"）
+const logged = computed(() => !!localStorage.getItem('token'))
 
 /* ---------------- 搜索状态 ---------------- */
 const keywordInput = ref('')   // 输入框绑定值
@@ -439,7 +471,7 @@ async function fetchHot() {
   }
 }
 
-/* ---------------- 请求信息流：搜索时 /moments/search，否则 /moments/list ---------------- */
+/* ---------------- 请求信息流：搜索时 /moments/search，只看朋友时 /moments/friends，否则 /moments/list ---------------- */
 async function fetchList() {
   loading.value = true
   try {
@@ -448,6 +480,10 @@ async function fetchList() {
       // 搜索模式：按关键词匹配标题/正文/地点
       params.keyword = keyword.value
       const res = await axios.get('/moments/search', { params })
+      applyListData(res.data.data ?? {})
+    } else if (friendOnly.value && logged.value) {
+      // 只看朋友：朋友 + 我 的动态（后端已按时间倒序，sort 不适用）
+      const res = await axios.get('/moments/friends', { params: { page: 1, size } })
       applyListData(res.data.data ?? {})
     } else {
       if (topicId.value) params.topicId = topicId.value
@@ -472,21 +508,44 @@ function applyListData(data) {
 async function loadMore() {
   const next = page.value + 1
   try {
-    const params = { page: next, size, sort: sort.value }
     if (keyword.value) {
-      params.keyword = keyword.value
-    } else if (topicId.value) {
-      params.topicId = topicId.value
+      const params = { page: next, size, sort: sort.value, keyword: keyword.value }
+      const res = await axios.get('/moments/search', { params })
+      const data = res.data.data ?? {}
+      moments.value = [...moments.value, ...(data.records ?? [])]
+      page.value = next
+      hasMore.value = data.current < data.pages
+    } else if (friendOnly.value && logged.value) {
+      const res = await axios.get('/moments/friends', { params: { page: next, size } })
+      const data = res.data.data ?? {}
+      moments.value = [...moments.value, ...(data.records ?? [])]
+      page.value = next
+      hasMore.value = data.current < data.pages
+    } else {
+      const params = { page: next, size, sort: sort.value }
+      if (topicId.value) params.topicId = topicId.value
+      const res = await axios.get('/moments/list', { params })
+      const data = res.data.data ?? {}
+      moments.value = [...moments.value, ...(data.records ?? [])]
+      page.value = next
+      hasMore.value = data.current < data.pages
     }
-    const url = keyword.value ? '/moments/search' : '/moments/list'
-    const res = await axios.get(url, { params })
-    const data = res.data.data ?? {}
-    moments.value = [...moments.value, ...(data.records ?? [])]
-    page.value = next
-    hasMore.value = data.current < data.pages
   } catch (err) {
     // 错误提示由 main.js 的响应拦截器统一弹出
   }
+}
+
+/* ---------------- 只看朋友 开关 ---------------- */
+function toggleFriendOnly() {
+  friendOnly.value = !friendOnly.value
+  // 进入只看朋友时清除搜索词与话题筛选，语义更清晰
+  if (friendOnly.value) {
+    keyword.value = ''
+    keywordInput.value = ''
+    topicId.value = 0
+  }
+  page.value = 1
+  switchFilterThenFetch()
 }
 
 /* ---------------- 搜索交互 ---------------- */
@@ -561,11 +620,11 @@ function switchFilterThenFetch() {
 }
 
 /* ---------------- 图片地址处理 ---------------- */
-// 后端返回相对路径（形如 /images/xxx.png），拼上 baseURL；已是完整 URL 则直接使用
+// 后端返回相对路径（形如 /images/xxx.png），交给 vite proxy 的 /images 规则转发；已是完整 URL 则直接使用
 function imgUrl(img) {
   if (!img) return ''
   if (img.startsWith('http') || img.startsWith('//')) return img
-  return 'http://localhost:8080' + (img.startsWith('/') ? img : '/' + img)
+  return img.startsWith('/') ? img : '/' + img
 }
 
 // 图片点击：简单预览（新窗口打开原图）
@@ -598,19 +657,17 @@ onMounted(() => {
   particles = initParticles()
   particles?.start()
 
-  // 入场区滚出视口后：暂停视频解码 + 粒子停帧 + 停止诗句打字机与流字动画；
+  // 入场区滚出视口后：暂停壁纸动效 + 粒子停帧 + 停止诗句打字机与流字动画；
   // 滚回来再恢复。让下方应用场景的滚动完全零入场动画开销。
   const heroEl = heroSection.value
-  const v = entryVideo.value
   if (heroEl && 'IntersectionObserver' in window) {
     entryObserver = new IntersectionObserver(
       ([entry]) => {
         heroEl.classList.toggle('entry-paused', !entry.isIntersecting)
+        heroPaused.value = !entry.isIntersecting
         if (entry.isIntersecting) {
-          v?.play().catch(() => {})
           particles?.start()
         } else {
-          v?.pause()
           particles?.stop()
         }
       },
@@ -643,26 +700,11 @@ onBeforeUnmount(() => {
   justify-content: center;
   overflow: hidden;
 }
-.entry-video-wrap {
+/* 水墨壁纸层：组件自带压暗与暗角，这里只管定位和层级 */
+.entry-backdrop {
   position: absolute;
   inset: 0;
   z-index: 0;
-  overflow: hidden;
-}
-.entry-video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: grayscale(100%) brightness(0.42);
-  transform: translateZ(0);
-}
-.entry-video-mask {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 80% 75% at 42% 48%, rgba(6, 12, 14, 0.42) 0%, rgba(4, 7, 10, 0.82) 100%),
-    linear-gradient(90deg, rgba(6, 9, 12, 0.72) 0%, rgba(6, 9, 12, 0.25) 55%, rgba(6, 9, 12, 0.55) 100%),
-    linear-gradient(to bottom, rgba(10, 12, 16, 0.3) 0%, transparent 25%, transparent 70%, #0a0a0a 100%);
 }
 /* 粒子层：覆盖首屏，不拦截鼠标 */
 .entry-particles {
@@ -1191,6 +1233,41 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 12px rgba(222, 217, 203, 0.2);
 }
 
+/* 只看朋友开关：与排序组并列，开启时金色高亮 + 圆点亮起 */
+.friend-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: var(--txt-3);
+  background: rgba(10, 13, 18, 0.4);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-ctrl);
+  cursor: pointer;
+  transition: color 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+}
+.friend-toggle .friend-toggle-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--txt-3);
+  opacity: 0.5;
+  transition: background 0.25s ease, opacity 0.25s ease, box-shadow 0.25s ease;
+}
+.friend-toggle:hover { color: var(--txt-1); border-color: var(--c-gold-dim); }
+.friend-toggle.active {
+  color: var(--c-gold);
+  border-color: var(--c-gold-dim);
+  background: rgba(222, 217, 203, 0.08);
+}
+.friend-toggle.active .friend-toggle-dot {
+  background: var(--c-gold);
+  opacity: 1;
+  box-shadow: 0 0 8px rgba(222, 217, 203, 0.6);
+}
+
 /* 卡片列表：设最小高度，避免少内容/空结果时页面骤然变矮、
    滚动位置被浏览器 clamp 造成界面跳动 */
 .card-list { min-height: calc(100vh - 320px); }
@@ -1533,6 +1610,64 @@ onBeforeUnmount(() => {
   .search-bar { max-width: none; flex-basis: 100%; }
   .toolbar-right { width: 100%; justify-content: space-between; }
 }
+/* ---------- 每日一诗横幅（古风毛玻璃试水层） ----------
+   静态元素、不随滚动重绘，可以安全用真 blur；
+   与卡片不同，这里只有 1 个实例，不构成逐帧采样压力。 */
+.verse-strip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  max-width: 1180px;
+  margin: 28px auto 0;
+  padding: 16px 26px;
+  background: linear-gradient(
+    90deg,
+    rgba(166, 58, 46, 0.16) 0%,
+    rgba(20, 18, 16, 0.62) 26%,
+    rgba(20, 18, 16, 0.62) 74%,
+    rgba(166, 58, 46, 0.1) 100%
+  );
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(222, 217, 203, 0.14);
+  border-left: 2px solid rgba(166, 58, 46, 0.62);
+  border-radius: var(--radius-card);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.34);
+}
+.verse-strip-mark {
+  flex: none;
+  padding: 3px 10px;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: rgba(222, 217, 203, 0.52);
+  border: 1px solid rgba(222, 217, 203, 0.2);
+  border-radius: 999px;
+}
+.verse-strip-text {
+  margin: 0;
+  font-family: var(--font-brush);
+  font-size: 20px;
+  letter-spacing: 4px;
+  color: rgba(245, 245, 245, 0.9);
+}
+.verse-strip-sign {
+  flex: none;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: rgba(222, 217, 203, 0.38);
+}
+@media (max-width: 768px) {
+  .verse-strip {
+    flex-direction: column;
+    gap: 8px;
+    margin: 18px 16px 0;
+    padding: 14px 16px;
+  }
+  .verse-strip-text { font-size: 15px; letter-spacing: 2px; text-align: center; }
+}
+
 /* 尊重减少动态效果 */
 @media (prefers-reduced-motion: reduce) {
   .entry-copy, .entry-title, .entry-en, .entry-role,

@@ -1,7 +1,7 @@
 <!-- src/views/Detail.vue —— 动态详情页（尘叙阁·暗色玄幻风）
      数据：GET /moments/{id} 一次性拿到动态 + 已组装好的评论树
-     评论：POST /api/comment/add（一级评论 parentId 默认 0；回复带 parentId / replyUserId）
-     删除：DELETE /api/comment/{id}（仅自己的评论可删）
+     评论：POST /comments（一级评论 parentId 默认 0；回复带 parentId / replyUserId）
+     删除：DELETE /comments/{id}（仅自己的评论可删）
      评论请求头：main.js 的请求拦截器已同时带上 Authorization 与 token 两个头 -->
 <template>
   <div class="detail" v-loading="loading">
@@ -46,6 +46,9 @@
         <span class="stat-like"><LikeButton :targetId="moment.id" :targetType="1" :initial="moment.likeCount ?? 0" /> 赞</span>
         <span>✎ {{ moment.commentCount ?? 0 }} 评</span>
         <span class="stat-collect"><CollectButton :momentId="moment.id" :initial="moment.collectCount ?? 0" /> 藏</span>
+        <!-- 仅作者可见：编辑 / 删除 -->
+        <span v-if="isMine" class="stat-op" @click="goEdit">编辑</span>
+        <span v-if="isMine" class="stat-op stat-op-danger" @click="handleDelete">删除</span>
       </div>
     </div>
 
@@ -192,6 +195,34 @@ function canDelete(comment) {
   return Number(comment.commentUserId) === Number(myUserId.value)
 }
 
+/* ---------------- 动态管理：编辑 / 删除（仅作者） ---------------- */
+const isMine = computed(() =>
+  moment.value?.userId != null && myUserId.value != null
+  && Number(moment.value.userId) === Number(myUserId.value))
+
+function goEdit() {
+  router.push({ path: '/publish', query: { edit: moment.value.id } })
+}
+
+async function handleDelete() {
+  try {
+    await ElMessageBox.confirm('删除后不可恢复，确定删除这条动态吗？', '删除动态', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  try {
+    await axios.delete(`/moments/${moment.value.id}`)
+    ElMessage.success('已删除')
+    router.push('/home')
+  } catch (err) {
+    /* 错误提示由响应拦截器统一弹出 */
+  }
+}
+
 /* ---------------- 回复 / 取消回复 ---------------- */
 // level === 0：回复一级评论 → parentId=该评论 id，replyUserId=评论作者
 // level >= 1：回复子评论 → parentId 保持其一级评论 id，replyUserId=被回复人 id
@@ -213,7 +244,7 @@ function cancelReply() {
   replyTarget.replyUserId = null
 }
 
-/* ---------------- 发表评论：POST /api/comment/add ---------------- */
+/* ---------------- 发表评论：POST /comments ---------------- */
 async function onPost() {
   const content = commentText.value.trim()
   if (!content) {
@@ -228,7 +259,7 @@ async function onPost() {
       parentId: replyTarget.parentId || 0,  // 默认 0 表示一级评论
     }
     if (replyTarget.replyUserId) body.replyUserId = replyTarget.replyUserId
-    await axios.post('/api/comment/add', body)
+    await axios.post('/comments', body)
     ElMessage.success('回响已留下')
     commentText.value = ''
     cancelReply()
@@ -241,7 +272,7 @@ async function onPost() {
   }
 }
 
-/* ---------------- 删除评论：DELETE /api/comment/{id} ---------------- */
+/* ---------------- 删除评论：DELETE /comments/{id} ---------------- */
 async function onDelete(commentId) {
   try {
     await ElMessageBox.confirm('确定删除这条回响吗？', '删除确认', {
@@ -253,7 +284,7 @@ async function onDelete(commentId) {
     return // 取消
   }
   try {
-    await axios.delete(`/api/comment/${commentId}`)
+    await axios.delete(`/comments/${commentId}`)
     ElMessage.success('已删除')
     fetchDetail()
   } catch (err) {
@@ -265,7 +296,7 @@ async function onDelete(commentId) {
 function imgUrl(img) {
   if (!img) return ''
   if (img.startsWith('http') || img.startsWith('//')) return img
-  return 'http://localhost:8080' + (img.startsWith('/') ? img : '/' + img)
+  return img.startsWith('/') ? img : '/' + img
 }
 
 function preview(i) {
@@ -412,6 +443,28 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+/* 作者专属：编辑 / 删除 */
+.detail-stats .stat-op {
+  margin-left: auto;
+  padding: 3px 12px;
+  border: 1px solid var(--card-border);
+  border-radius: 2px;
+  cursor: pointer;
+  color: var(--txt-2);
+  letter-spacing: 2px;
+  transition: all 0.2s ease;
+}
+.detail-stats .stat-op:hover {
+  border-color: var(--card-border-hover);
+  color: var(--txt-1);
+}
+.detail-stats .stat-op-danger:hover {
+  border-color: #7a3b3b;
+  color: #d98a8a;
+}
+.detail-stats .stat-op + .stat-op {
+  margin-left: 0;
 }
 
 /* ---------- 评论区 ---------- */

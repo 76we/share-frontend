@@ -14,7 +14,9 @@ import './style.css'                                         // 全局样式（�
 document.documentElement.classList.add('dark')
 
 // 后端统一地址（登录注册也用它）
-axios.defaults.baseURL = 'http://localhost:8080'
+// 走相对路径 '/api'，由 vite.config.js 的 proxy 转发到 http://localhost:8080，
+// 这样后端换端口不用改前端代码，也不会再有跨域问题。
+axios.defaults.baseURL = '/api'
 
 // ① 全局注册 Element Plus + 路由
 const app = createApp(App)
@@ -81,11 +83,11 @@ axios.interceptors.response.use(
       const code = err.code || 'ERR_UNKNOWN'
       let tip = `请求未到达后端（${code}）`
       if (/Mixed Content/i.test(err.message || '')) {
-        tip = '当前是 HTTPS 页面，浏览器拦截了对 http://localhost:8080 的请求（Mixed Content）。请用 http:// 打开页面。'
+        tip = '当前是 HTTPS 页面，浏览器拦截了接口请求（Mixed Content）。请用 http://localhost:5173 打开页面。'
       } else if (code === 'ERR_NETWORK' && /CORS|cross-origin/i.test(err.message || '')) {
-        tip = '跨域请求被浏览器拦截：请确认页面从 localhost:5173 打开，且后端 CORS 正常。'
+        tip = '请求被浏览器拦截：请确认页面从 http://localhost:5173 打开（不要直接用 IP 或 127.0.0.1 混用）。'
       } else {
-        tip += '：请确认 IDEA 后端 8080 已启动；若开着代理/VPN/加速器，请把 localhost 加入排除。详情见控制台。'
+        tip += '：请确认 IDEA 后端已启动在 8080（vite proxy 的 target 见 vite.config.js）；若开着代理/VPN/加速器，请把 localhost 加入排除。详情见控制台。'
       }
       ElMessage.error(tip)
     }

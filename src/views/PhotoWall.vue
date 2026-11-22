@@ -56,6 +56,11 @@
           :class="{ active: mode === 'albums' }"
           @click="switchMode('albums')"
         >我的相册</button>
+        <button
+          class="wall-tab"
+          :class="{ active: mode === 'friends' }"
+          @click="switchMode('friends')"
+        >好友墙</button>
       </div>
 
       <!-- 年度回忆：年份选择 -->
@@ -90,6 +95,61 @@
       </div>
 
       <template v-if="mode !== 'albums'">
+
+      <!-- ===== 好友墙模式：每位好友一节 ===== -->
+      <template v-if="mode === 'friends'">
+        <!-- 加载中 -->
+        <div v-if="loading && friendGroups.length === 0" class="wall-state">
+          <span class="wall-spinner"></span>
+          <p>正在收集好友的光影…</p>
+        </div>
+
+        <!-- 空状态 -->
+        <div v-else-if="friendGroups.length === 0" class="wall-state">
+          <p class="wall-empty-text">{{ emptyHint }}</p>
+          <router-link to="/profile" class="wall-login-btn">去添加好友</router-link>
+        </div>
+
+        <template v-else>
+          <!-- 每位好友一节 -->
+          <section v-for="f in friendGroups" :key="f.friendId" class="friend-section">
+            <header class="friend-head">
+              <span class="friend-avatar">
+                <img v-if="f.friendAvatar" :src="imgUrl(f.friendAvatar)" alt="" />
+                <span v-else>{{ (f.friendName || '尘').charAt(0) }}</span>
+              </span>
+              <span class="friend-name">{{ f.friendName }}</span>
+              <span class="friend-count">· {{ f.totalCount }} 张照片</span>
+              <button class="friend-view" @click="router.push(`/photowall/${f.friendId}`)">看 TA 的墙</button>
+            </header>
+            <div class="polaroid-grid">
+              <div
+                v-for="(photo, i) in f.photos"
+                :key="photo.id"
+                class="polaroid"
+                :style="polaroidStyle(photo, i)"
+                @click="openLightbox(friendGlobalIndexOf(f, i))"
+              >
+                <span class="tape"></span>
+                <div class="polaroid-frame">
+                  <div class="polaroid-img landscape">
+                    <img :src="imgUrl(photo.url)" :alt="photo.caption || '照片'" loading="lazy" />
+                  </div>
+                </div>
+                <span v-if="photo.caption" class="polaroid-caption">{{ photo.caption }}</span>
+                <span class="polaroid-like" @click.stop>
+                  <LikeButton :target-id="photo.id" :target-type="3" :initial="photo.likeCount || 0" />
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <p class="wall-end">— 已至卷末 —</p>
+        </template>
+      </template>
+
+      <!-- ===== 月份模式：原有结构 ===== -->
+      <template v-else>
       <!-- 加载中（首页） -->
       <div v-if="loading && groups.length === 0" class="wall-state">
         <span class="wall-spinner"></span>
@@ -192,6 +252,7 @@
         <div class="lb-counter">{{ lightboxIndex + 1 }} / {{ photos.length }}</div>
       </div>
     </transition>
+    </template>
   </div>
 </template>
 
@@ -201,6 +262,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   getMyPhotosGrouped, getAnniversaryPhotosGrouped, getOtherPhotosGrouped,
   getYearPhotosGrouped, getPhotoWallVisibility, setPhotoWallVisibility,
+  getFriendPhotos,
 } from '../utils/photoWallApi'
 import { requestFriend } from '../utils/friendshipApi'
 import LikeButton from '../components/LikeButton.vue'
@@ -222,6 +284,7 @@ const emptyHint = computed(() => ({
   anniversary: '往年今日，尚无留影',
   year: `${selectedYear.value} 年，尚未留下光影`,
   albums: '还没有相册',
+  friends: '还没有好友，添加朋友后 TA 的照片会出现在这里',
 }[mode.value] || '还没有照片，发一条带图动态吧'))
 const loading = ref(false)
 const denied = ref('')                   // 访问他人私密墙时的提示
@@ -231,6 +294,9 @@ const canApplyFriend = computed(() => denied.value.includes('好友'))
 const visibility = ref(0)                // 0私密 1公开 2仅好友
 const visibilitySaving = ref(false)
 const friendRequested = ref(false)       // 向 TA 发起过好友申请
+
+// 好友墙：每位好友近期照片，按好友分段 [{ friendId, friendName, friendAvatar, totalCount, photos }]
+const friendGroups = ref([])
 
 const lightboxOpen = ref(false)
 const lightboxIndex = ref(0)
@@ -255,12 +321,15 @@ function resolveMyUserId() {
 }
 
 // 灯箱用扁平照片流：把各月份区间按顺序展开，索引全局连续
-const photos = computed(() => groups.value.flatMap((g) => g.photos || []))
+const photos = computed(() => mode.value === 'friends'
+  ? friendGroups.value.flatMap((g) => g.photos || [])
+  : groups.value.flatMap((g) => g.photos || []))
 
 function imgUrl(url) {
   if (!url) return ''
   if (/^https?:\/\//.test(url)) return url
-  return 'http://localhost:8080' + url
+  // 相对路径即可，由 vite proxy 的 /images 规则转发到后端
+  return url.startsWith('/') ? url : '/' + url
 }
 
 function monthKey(g) {
@@ -283,6 +352,15 @@ function globalIndexOf(g, i) {
   for (const group of groups.value) {
     if (group === g) break
     offset += (group.photos || []).length
+  }
+  return offset + i
+}
+// 好友墙：某好友节内第 i 张在全局扁平流（跨所有好友）中的索引
+function friendGlobalIndexOf(fg, i) {
+  let offset = 0
+  for (const f of friendGroups.value) {
+    if (f === fg) break
+    offset += (f.photos || []).length
   }
   return offset + i
 }
@@ -369,7 +447,21 @@ function switchMode(next) {
   if (mode.value === next) return
   mode.value = next
   closeLightbox()
-  if (next !== 'albums') fetchPhotos()
+  if (next === 'friends') fetchFriends()
+  else if (next !== 'albums') fetchPhotos()
+}
+
+async function fetchFriends() {
+  loading.value = true
+  denied.value = ''
+  try {
+    const data = await getFriendPhotos(6)
+    friendGroups.value = Array.isArray(data) ? data : []
+  } catch (e) {
+    friendGroups.value = []
+  } finally {
+    loading.value = false
+  }
 }
 
 function selectYear(year) {
@@ -507,6 +599,59 @@ onBeforeUnmount(() => {
   border-color: var(--c-gold-dim);
   background: rgba(222, 217, 203, 0.08);
 }
+
+/* ---------- 好友墙：每位好友一节 ---------- */
+.friend-section {
+  margin-bottom: 36px;
+}
+.friend-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--card-border);
+  margin-bottom: 22px;
+}
+.friend-avatar {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid var(--c-gold-dim);
+  box-shadow: 0 0 0 3px var(--c-gold-faint);
+  background: rgba(222, 217, 203, 0.08);
+  color: var(--c-gold);
+  font-family: var(--font-brush);
+  font-size: 18px;
+}
+.friend-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.friend-name {
+  font-family: var(--font-brush);
+  font-size: 20px;
+  letter-spacing: 2px;
+  color: var(--c-gold);
+}
+.friend-count {
+  font-size: 12px;
+  color: var(--c-gold-dim);
+  letter-spacing: 1px;
+}
+.friend-view {
+  margin-left: auto;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--c-gold-dim);
+  background: transparent;
+  border: 1px solid var(--card-border);
+  border-radius: 2px;
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: color 0.25s ease, border-color 0.25s ease;
+}
+.friend-view:hover { color: var(--c-gold); border-color: var(--c-gold-dim); }
 
 /* ---------- 可见性开关 ---------- */
 .visibility-row {

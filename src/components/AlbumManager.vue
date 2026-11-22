@@ -111,7 +111,8 @@ const selectedIds = reactive(new Set())
 function imgUrl(url) {
   if (!url) return ''
   if (/^https?:\/\//.test(url)) return url
-  return 'http://localhost:8080' + url
+  // 相对路径即可，由 vite proxy 的 /images 规则转发到后端
+  return url.startsWith('/') ? url : '/' + url
 }
 
 async function loadAlbums() {

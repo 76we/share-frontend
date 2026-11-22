@@ -65,7 +65,7 @@ defineEmits(['reply', 'delete'])
 function imgUrl(img) {
   if (!img) return ''
   if (img.startsWith('http') || img.startsWith('//')) return img
-  return 'http://localhost:8080' + (img.startsWith('/') ? img : '/' + img)
+  return img.startsWith('/') ? img : '/' + img
 }
 
 function formatTime(t) {

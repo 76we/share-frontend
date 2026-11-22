@@ -104,6 +104,17 @@
                 />
               </div>
               <div class="moment-meta">
+                <!-- 我的发布：可直接管理自己这条动态 -->
+                <span
+                  v-if="activeTab === 'moments' && !isOther"
+                  class="meta-chip"
+                  @click.stop="editMoment(m)"
+                >编辑</span>
+                <span
+                  v-if="activeTab === 'moments' && !isOther"
+                  class="meta-chip"
+                  @click.stop="removeMoment(m)"
+                >删除</span>
                 <span v-if="m.location" class="meta-chip">📍 {{ m.location }}</span>
                 <span v-if="m.mood" class="meta-chip">心情 · {{ m.mood }}</span>
                 <span class="meta-stats">
@@ -176,7 +187,8 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import axios from 'axios'
 import LikeButton from '../components/LikeButton.vue'
 import CollectButton from '../components/CollectButton.vue'
 import {
@@ -324,6 +336,30 @@ async function loadMore() {
   await fetchList(false)
 }
 
+/* ---------------- 动态管理：编辑 / 删除（仅我的发布） ---------------- */
+function editMoment(m) {
+  router.push({ path: '/publish', query: { edit: m.id } })
+}
+
+async function removeMoment(m) {
+  try {
+    await ElMessageBox.confirm('删除后不可恢复，确定删除这条动态吗？', '删除动态', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  try {
+    await axios.delete(`/moments/${m.id}`)
+    ElMessage.success('已删除')
+    list.value = list.value.filter((x) => x.id !== m.id)
+  } catch (err) {
+    /* 错误提示由响应拦截器统一弹出 */
+  }
+}
+
 /* ---------------- 编辑资料 ---------------- */
 const editVisible = ref(false)
 const saving = ref(false)
@@ -395,7 +431,7 @@ async function submitPassword() {
 function imgUrl(img) {
   if (!img) return ''
   if (img.startsWith('http') || img.startsWith('//')) return img
-  return 'http://localhost:8080' + (img.startsWith('/') ? img : '/' + img)
+  return img.startsWith('/') ? img : '/' + img
 }
 function preview(img) {
   window.open(imgUrl(img), '_blank')

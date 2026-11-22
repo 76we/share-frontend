@@ -1,17 +1,13 @@
-<!-- src/views/LoginView.vue —— 登录 / 注册页（尘叙阁·暗色玄幻风）
+<!-- src/views/LoginView.vue —— 登录 / 注册页（尘叙阁·水墨动态壁纸版）
+     首屏背景用 InkBackdrop.vue（静态水墨图 + CSS 动效），不再依赖视频文件；
      对接 POST /users/login、POST /users/register，登录成功后 token 存 localStorage 并跳 /home -->
 <template>
   <div class="login-page">
     <!-- ① 首屏 Hero：占满一屏，品牌大字 + 诗句轮播 + 向下探索提示 -->
-    <section class="hero" ref="heroSection">
-      <!-- 首屏视频背景：森林丁达尔绿光（B站「奇迹-创造者」Wallpaper Engine 素材）；
-           静态图（App.vue 全局背景）在视频加载前/失败时兜底 -->
-      <div class="hero-video-wrap" aria-hidden="true">
-        <video ref="heroVideo" class="hero-video" autoplay loop muted playsinline preload="metadata">
-          <source src="/forest-tyndall.mp4" type="video/mp4" />
-        </video>
-        <div class="hero-video-mask"></div>
-      </div>
+    <section class="hero">
+      <!-- 首屏动态壁纸：云海楼阁（静态图 212KB + CSS 四层动效，见 InkBackdrop.vue）。
+           不再使用 forest-tyndall.mp4（B站壁纸素材，无可商用授权） -->
+      <InkBackdrop class="hero-backdrop" src="/ink-pavilion.jpg" :dim="0.78" />
 
       <h1 class="hero-title flow-text">尘叙阁</h1>
       <p class="hero-en">CHEN XU PAVILION</p>
@@ -67,40 +63,19 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { useVerseTyper } from '../utils/useVerseTyper'
+import InkBackdrop from '../components/InkBackdrop.vue'
 
 const router = useRouter()
 
-/* ---------------- 首屏视频：滚出视口暂停解码，回到视口恢复 ----------------
-   视频仅 8.7MB，首屏用 preload="metadata" 避免一次性下载；
-   滚动到登录卡片区后暂停，保证下方表单滚动零解码开销。 */
-const heroVideo = ref(null)
-const heroSection = ref(null)
-let heroObserver = null
-onMounted(() => {
-  const heroEl = heroSection.value
-  const v = heroVideo.value
-  if (heroEl && 'IntersectionObserver' in window) {
-    heroObserver = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) v?.play().catch(() => {})
-        else v?.pause()
-      },
-      // 登录页较短，滚到卡片区时首屏仍有一部分留在视口内；
-      // 把观察带压到视口下 40%，首屏大半滚出即暂停，避免观察器误判为仍可见
-      { threshold: 0, rootMargin: '-60% 0px 0px 0px' }
-    )
-    heroObserver.observe(heroEl)
-  }
-})
-onBeforeUnmount(() => {
-  heroObserver?.disconnect()
-  heroObserver = null
-})
+/* ---------------- 首屏动态壁纸 ----------------
+   画面动效全部交给 InkBackdrop.vue 的 CSS（推镜 + 两层雾漂移 + 朱砂呼吸），
+   不需要 JS 也不需要视频解码，滚动时零额外开销。
+   想换画面只改 src，想换风格改组件里的图层参数即可。 */
 
 /* ---------------- 向下探索：滚动到登录卡片 ---------------- */
 const cardSection = ref(null)
@@ -191,27 +166,27 @@ async function handleSubmit() {
   position: relative;
   overflow: hidden;
 }
-/* ---------- 首屏视频层：与首页同源，静态图兜底 ---------- */
-.hero-video-wrap {
+/* ---------- 首屏动态壁纸层 ---------- */
+.hero-backdrop {
   position: absolute;
   inset: 0;
   z-index: 0;
-  overflow: hidden;
 }
-.hero-video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  /* 森林丁达尔素材保留绿光色调，只压暗 + 轻微降饱和，避免白字不可读 */
-  filter: brightness(0.42) saturate(0.85);
-  transform: translateZ(0);
-}
-.hero-video-mask {
+/* 文字压罩：这张图右侧云海很亮，居中的白字会被吃掉，
+   所以在画面中部单独加深一层椭圆遮罩，只压文字区域、不吃掉阁楼与云纹细节 */
+.hero-backdrop::after {
+  content: '';
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(ellipse 75% 65% at 50% 48%, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.8) 100%),
-    linear-gradient(to bottom, rgba(10, 10, 10, 0.25) 0%, transparent 25%, transparent 70%, #0a0a0a 100%);
+  z-index: 5;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 54% 48% at 50% 47%,
+    rgba(0, 0, 0, 0.52) 0%,
+    rgba(0, 0, 0, 0.34) 42%,
+    rgba(0, 0, 0, 0.08) 68%,
+    transparent 82%
+  );
 }
 /* 视频层之上：前景文字提升层级 */
 .hero-title,

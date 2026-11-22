@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap" rel="stylesheet" />
+<style>
+  html,body{margin:0;padding:0;background:#0a0c10;}
+  .wrap{min-height:100vh;padding:26px 0 30px;background:url('/ink-pavilion.jpg') center/cover no-repeat;position:relative;}
+  .wrap::before{content:'';position:absolute;inset:0;background:rgba(7,9,13,.66);}
+  .inner{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 40px;}
+  .row{display:flex;align-items:center;gap:40px;padding:12px 0;border-bottom:1px solid rgba(222,217,203,.1);}
+  .meta{width:210px;flex:none;}
+  .name{font-family:sans-serif;font-size:13px;letter-spacing:1px;color:#ded9cb;}
+  .dots{display:flex;gap:6px;margin-top:9px;}
+  .dot{width:15px;height:15px;border-radius:50%;border:1px solid rgba(255,255,255,.16);}
+  .en{font-family:sans-serif;font-size:10px;color:rgba(222,217,203,.42);margin-top:7px;}
+  .big{
+    font-family:'Ma Shan Zheng',cursive;
+    font-size:96px;line-height:1.1;letter-spacing:12px;
+    background-size:250% 100%;
+    background-position:32% 50%;
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    filter:drop-shadow(0 6px 26px rgba(0,0,0,.85));
+  }
+  /* A 现状：白 · 淡金 · 冷银 */
+  .pA{background-image:linear-gradient(100deg,#ffffff 0%,#ded9cb 25%,#ffffff 45%,#cfd8e8 65%,#ffffff 85%);}
+  /* B 朱砂印 */
+  .pB{background-image:linear-gradient(100deg,#8e2f24 0%,#d98b73 22%,#a63a2e 45%,#e8bfa9 66%,#7e2b22 88%);}
+  /* C 暖金 */
+  .pC{background-image:linear-gradient(100deg,#a37f42 0%,#f3e3ba 24%,#c9a25a 46%,#fff3d2 68%,#8f7038 90%);}
+  /* D 青玉 */
+  .pD{background-image:linear-gradient(100deg,#2f6f70 0%,#bfeaea 24%,#4f9a9c 46%,#e6fbfa 68%,#2b5d5e 90%);}
+  /* E 暗金铭刻 */
+  .pE{background-image:linear-gradient(100deg,#6d5730 0%,#e8d6a8 24%,#a8834a 46%,#f6e9c8 68%,#5f4a24 90%);}
+</style>
+</head>
+<body>
+<div class="wrap"><div class="inner">
+
+  <div class="row">
+    <div class="meta">
+      <div class="name">A · 现状（白·淡金·冷银）</div>
+      <div class="dots"><i class="dot" style="background:#ffffff"></i><i class="dot" style="background:#ded9cb"></i><i class="dot" style="background:#cfd8e8"></i></div>
+    </div>
+    <div class="big pA">尘叙阁</div>
+  </div>
+
+  <div class="row">
+    <div class="meta">
+      <div class="name">B · 朱砂印</div>
+      <div class="dots"><i class="dot" style="background:#8e2f24"></i><i class="dot" style="background:#a63a2e"></i><i class="dot" style="background:#e8bfa9"></i></div>
+      <div class="en">印泥红，最点“阁”字题款</div>
+    </div>
+    <div class="big pB">尘叙阁</div>
+  </div>
+
+  <div class="row">
+    <div class="meta">
+      <div class="name">C · 暖金</div>
+      <div class="dots"><i class="dot" style="background:#a37f42"></i><i class="dot" style="background:#f3e3ba"></i><i class="dot" style="background:#c9a25a"></i></div>
+      <div class="en">金箔匾额，暖而不艳</div>
+    </div>
+    <div class="big pC">尘叙阁</div>
+  </div>
+
+  <div class="row">
+    <div class="meta">
+      <div class="name">D · 青玉</div>
+      <div class="dots"><i class="dot" style="background:#2f6f70"></i><i class="dot" style="background:#bfeaea"></i><i class="dot" style="background:#4f9a9c"></i></div>
+      <div class="en">清冷仙侠，像玉牌上的字</div>
+    </div>
+    <div class="big pD">尘叙阁</div>
+  </div>
+
+  <div class="row">
+    <div class="meta">
+      <div class="name">E · 暗金铭刻</div>
+      <div class="dots"><i class="dot" style="background:#6d5730"></i><i class="dot" style="background:#e8d6a8"></i><i class="dot" style="background:#a8834a"></i></div>
+      <div class="en">古铜浮雕，最沉</div>
+    </div>
+    <div class="big pE">尘叙阁</div>
+  </div>
+
+</div></div>
+</body>
+</html>

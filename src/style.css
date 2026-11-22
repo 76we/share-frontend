@@ -18,14 +18,14 @@
   --txt-1: rgba(244, 247, 251, 0.94);
   --txt-2: rgba(224, 231, 240, 0.58);
   --txt-3: rgba(216, 225, 238, 0.38);
-  /* 深灰水墨卡片（实色，零逐帧毛玻璃开销；冷灰比纯黑更有层次） */
-  --card-bg: rgba(29, 33, 40, 0.86);
-  --card-bg-solid: rgba(28, 32, 39, 0.88);
-  --card-bg-deep-solid: rgba(21, 25, 31, 0.94);
-  --card-border: rgba(216, 226, 240, 0.13);
-  --card-border-hover: rgba(216, 226, 240, 0.3);
+  /* 深灰水墨卡片（半透明近似毛玻璃，不做逐帧 blur 采样；冷灰比纯黑更有层次） */
+  --card-bg: rgba(24, 28, 35, 0.74);
+  --card-bg-solid: rgba(23, 27, 33, 0.72);
+  --card-bg-deep-solid: rgba(18, 21, 26, 0.88);
+  --card-border: rgba(222, 217, 203, 0.16);
+  --card-border-hover: rgba(222, 217, 203, 0.34);
   /* 统一圆角：大圆角卡片 + 柔和控件 */
-  --radius-card: 14px;
+  --radius-card: 16px;
   --radius-ctrl: 9px;
   --radius-sm: 6px;
   /* 输入框 / 填充 */
@@ -255,13 +255,14 @@ html.dark {
 /* ---------- ① 渐变文字流动（用于毛笔大字 Logo） ---------- */
 /* 用渐变填充文字，再让 background-position 循环移动，形成光在字里流过 */
 .flow-text {
+  /* 标题字色：暖金箔（古铜 → 浅金 → 亮金箔 → 高光 → 古铜），随 textFlow 横向流动 */
   background: linear-gradient(
     100deg,
-    #ffffff 0%,
-    var(--c-gold) 25%,
-    #ffffff 45%,
-    #cfd8e8 65%,
-    #ffffff 85%
+    #a37f42 0%,
+    #f3e3ba 24%,
+    #c9a25a 46%,
+    #fff3d2 68%,
+    #8f7038 90%
   );
   background-size: 250% 100%;
   -webkit-background-clip: text;

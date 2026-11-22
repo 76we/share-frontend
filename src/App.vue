@@ -170,7 +170,8 @@ const notifLoading = ref(false)
 function avatarUrl(url) {
   if (!url) return ''
   if (/^https?:\/\//.test(url)) return url
-  return 'http://localhost:8080' + url
+  // 相对路径即可，由 vite proxy 的 /images 规则转发到后端
+  return url.startsWith('/') ? url : '/' + url
 }
 
 function timeAgo(t) {
@@ -356,49 +357,45 @@ watch(
     linear-gradient(to bottom, rgba(10, 12, 16, 0.45) 0%, transparent 30%, transparent 70%, rgba(10, 12, 16, 0.7) 100%);
 }
 
-/* ---------- 顶部固定导航：毛玻璃黑底 + 底部淡金细线 ---------- */
+/* ---------- 顶部导航：悬浮胶囊（古风毛玻璃试水层） ----------
+   外层 navbar 只做定位与占位，视觉全部交给 .nav-inner 的胶囊体，
+   胶囊四周透出背景壁纸，与参考站的悬浮导航观感一致。 */
 .navbar {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 100;
-  background: linear-gradient(to bottom, rgba(18, 21, 27, 0.9), rgba(14, 17, 22, 0.78));
-  backdrop-filter: blur(14px) saturate(115%);
-  -webkit-backdrop-filter: blur(14px) saturate(115%);
-  border-bottom: 1px solid rgba(216, 226, 240, 0.1);
-  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.45);
-  transition: background 0.4s ease, backdrop-filter 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
-}
-/* 首页首屏顶部：导航透明无边框，融入视频入场动画 */
-.navbar.nav-transparent {
   background: transparent;
+  border: none;
+  box-shadow: none;
+  pointer-events: none;
+}
+/* 首页首屏顶部：胶囊完全隐去，让位给入场动画 */
+.navbar.nav-transparent .nav-inner {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border-bottom-color: transparent;
-  box-shadow: none;
-}
-.navbar.nav-transparent::after { opacity: 0; }
-/* 导航底部一道极淡的金线，提升精致度 */
-.navbar::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 1px;
-  background: linear-gradient(90deg,
-    transparent 0%,
-    rgba(232, 217, 181, 0.35) 50%,
-    transparent 100%);
 }
 .nav-inner {
-  max-width: 1180px;
-  margin: 0 auto;
+  max-width: 1200px;
+  margin: 10px auto 0;
   display: flex;
   align-items: center;
   gap: 40px;
-  padding: 12px 36px;
+  padding: 8px 26px;
+  border-radius: 999px;
+  /* 底色比周围壁纸亮一档：暗背景下毛玻璃无法靠"通透"显形，
+     只能靠浅色胶囊体与黑底的明度差撑出轮廓 */
+  background: linear-gradient(to bottom, rgba(40, 44, 52, 0.82), rgba(24, 28, 34, 0.74));
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  border: 1px solid rgba(222, 217, 203, 0.24);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  pointer-events: auto;
+  transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
 /* Logo：印章 + 毛笔字 */
@@ -572,10 +569,10 @@ watch(
   border-color: var(--c-gold);
 }
 
-/* 页面主体：为固定导航留出空间 */
+/* 页面主体：为悬浮胶囊导航留出空间（胶囊 10px 上边距 + 约 56px 高） */
 .page-body {
   flex: 1;
-  padding-top: 72px;
+  padding-top: 82px;
 }
 .page-body.no-nav {
   padding-top: 0;

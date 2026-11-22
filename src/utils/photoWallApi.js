@@ -62,3 +62,14 @@ export function getOtherPhotosGrouped(userId) {
 export function getYearPhotosGrouped(year) {
   return axios.get(`${BASE}/year/${year}/groups`).then((res) => res.data?.data)
 }
+
+/* ---------- 好友墙聚合 ---------- */
+
+/**
+ * 好友墙：每位好友近期照片，按好友分段。
+ * 返回 [{ friendId, friendName, friendAvatar, totalCount, photos: WallPhotoVO[] }]
+ * 每段最多 limit 张；私密墙的好友不会出现在结果里。
+ */
+export function getFriendPhotos(limit = 6) {
+  return axios.get(`${BASE}/friends`, { params: { limit } }).then((res) => res.data?.data)
+}

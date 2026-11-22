@@ -36,4 +36,18 @@ const router = createRouter({
   ],
 })
 
+// 全局前置守卫：无 token 只放行 /login，避免直接敲 /home 时白发一堆 401；
+// 已有 token 访问 /login 直接回首页。
+router.beforeEach((to) => {
+  const hasToken = !!localStorage.getItem('token')
+  if (!hasToken && to.path !== '/login') {
+    const query = to.fullPath && to.fullPath !== '/' ? { redirect: to.fullPath } : {}
+    return { path: '/login', query }
+  }
+  if (hasToken && to.path === '/login') {
+    return { path: '/home' }
+  }
+  return true
+})
+
 export default router

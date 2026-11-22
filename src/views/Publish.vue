@@ -1,12 +1,12 @@
 <!-- src/views/Publish.vue —— 发布图文页（尘叙阁·暗色玄幻风）
      表单：标题、内容、话题下拉（GET /topics）、地点、心情 + 多图上传
-     提交：POST /moments（multipart/form-data，dto 为 Blob 包裹的 JSON 字符串 + images 文件），
-     成功后跳 /home -->
+     新建：POST /moments（multipart/form-data，dto 为 Blob 包裹的 JSON 字符串 + images 文件），成功后跳 /home
+     编辑：/publish?edit=动态id，回填后走 PUT /moments/{id}（只改文字字段，话题与图片保持不变） -->
 <template>
   <div class="publish">
     <!-- 顶部标题 -->
     <header class="pub-header">
-      <h1 class="pub-title">执笔写下你的尘间事</h1>
+      <h1 class="pub-title">{{ isEdit ? '修订旧叙' : '执笔写下你的尘间事' }}</h1>
       <div class="divider"></div>
     </header>
 
@@ -29,8 +29,8 @@
           />
         </el-form-item>
 
-        <!-- 话题下拉（取自 GET /topics，可选） -->
-        <el-form-item label="话题（可选）">
+        <!-- 话题下拉（取自 GET /topics，可选）；编辑模式不允许改话题 -->
+        <el-form-item label="话题（可选）" v-if="!isEdit">
           <el-select
             v-model="form.topicId"
             placeholder="选择一个话题"
@@ -68,8 +68,8 @@
           <el-input v-model="form.mood" placeholder="如 风雪中，闲适" />
         </el-form-item>
 
-        <!-- 多图上传（最多 9 张，可选） -->
-        <el-form-item label="图片（可选，最多 9 张）">
+        <!-- 多图上传（最多 9 张，可选）；编辑模式不支持替换图片 -->
+        <el-form-item label="图片（可选，最多 9 张）" v-if="!isEdit">
           <el-upload
             v-model:file-list="fileList"
             list-type="picture-card"
@@ -91,7 +91,7 @@
             type="primary"
             :loading="loading"
             @click="handleSubmit"
-          >发 布</el-button>
+          >{{ isEdit ? '保存修改' : '发 布' }}</el-button>
         </div>
       </el-form>
     </div>
@@ -100,11 +100,16 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 
 const router = useRouter()
+const route = useRoute()
+
+// 编辑模式：/publish?edit=动态id，走 PUT /moments/{id}（只改文字字段，图片与话题不动）
+const editId = route.query.edit ? Number(route.query.edit) : null
+const isEdit = !!editId
 
 /* ---------------- 表单数据 ---------------- */
 // 后端 dto 字段：title 可选，content 必填，topicId / location / mood 可选
@@ -168,6 +173,18 @@ async function handleSubmit() {
 
   loading.value = true
   try {
+    // 编辑模式：PUT /moments/{id}，只提交文字字段（话题、图片保持原值）
+    if (isEdit) {
+      const editDto = { content: form.content.trim() }
+      if (form.title.trim()) editDto.title = form.title.trim()
+      if (form.location.trim()) editDto.location = form.location.trim()
+      if (form.mood.trim()) editDto.mood = form.mood.trim()
+      await axios.put(`/moments/${editId}`, editDto)
+      ElMessage.success('修改已保存')
+      router.push(`/detail/${editId}`)
+      return
+    }
+
     // ① dto：组成 JSON 字符串，用 Blob 包裹后放入 form-data
     const dto = { content: form.content.trim() }
     if (form.title.trim()) dto.title = form.title.trim()
@@ -204,9 +221,25 @@ async function handleSubmit() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   fetchTopics()
+  if (isEdit) await loadForEdit()
 })
+
+/** 编辑模式：把已有动态回填到表单 */
+async function loadForEdit() {
+  try {
+    const res = await axios.get(`/moments/${editId}`)
+    const m = res.data?.data
+    if (!m) throw new Error('not found')
+    form.title = m.title || ''
+    form.content = m.content || ''
+    form.location = m.location || ''
+    form.mood = m.mood || ''
+  } catch (err) {
+    ElMessage.error('加载原动态失败，请返回重试')
+  }
+}
 </script>
 
 <style scoped>
