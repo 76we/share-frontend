@@ -33,7 +33,7 @@
         <div class="nav-user">
           <template v-if="token">
             <!-- 通知铃铛：未读角标 + 下拉列表 -->
-            <el-popover placement="bottom-end" :width="340" trigger="click" popper-class="notif-popper" @show="loadNotifs">
+            <el-popover placement="bottom-end" :width="340" trigger="click" popper-class="notif-popper" @show="openPanel">
               <template #reference>
                 <button class="bell-btn" aria-label="通知">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -69,6 +69,62 @@
                     <span v-if="n.isRead === 0" class="notif-dot"></span>
                   </div>
                 </div>
+
+                <!-- 待处理的好友申请（就地同意 / 拒绝 / 撤回） -->
+                <template v-if="friendIncoming.length || friendSent.length">
+                  <div class="friend-section">
+                    <div class="friend-section-title">好友申请</div>
+
+                    <div v-if="friendIncoming.length" class="friend-block">
+                      <p class="friend-sub">收到的申请</p>
+                      <div
+                        v-for="f in friendIncoming"
+                        :key="'in-' + f.id"
+                        class="friend-row"
+                      >
+                        <span class="notif-avatar">
+                          <img v-if="f.avatar" :src="avatarUrl(f.avatar)" alt="" />
+                          <span v-else>{{ (f.nickname || f.username || '尘').charAt(0) }}</span>
+                        </span>
+                        <div class="friend-info">
+                          <b class="friend-name">{{ f.nickname || f.username }}</b>
+                          <span class="friend-name-sub">@{{ f.username }}</span>
+                        </div>
+                        <div class="friend-actions">
+                          <button class="friend-accept" :disabled="f.processing === 1" @click="onAccept(f)">
+                            {{ f.processing === 1 ? '…' : '同意' }}
+                          </button>
+                          <button class="friend-reject" :disabled="f.processing === 2" @click="onReject(f)">
+                            {{ f.processing === 2 ? '…' : '拒绝' }}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div v-if="friendSent.length" class="friend-block">
+                      <p class="friend-sub">我发出的申请</p>
+                      <div
+                        v-for="f in friendSent"
+                        :key="'out-' + f.id"
+                        class="friend-row"
+                      >
+                        <span class="notif-avatar">
+                          <img v-if="f.avatar" :src="avatarUrl(f.avatar)" alt="" />
+                          <span v-else>{{ (f.nickname || f.username || '尘').charAt(0) }}</span>
+                        </span>
+                        <div class="friend-info">
+                          <b class="friend-name">{{ f.nickname || f.username }}</b>
+                          <span class="friend-name-sub">已发出，等待对方同意</span>
+                        </div>
+                        <div class="friend-actions">
+                          <button class="friend-reject" :disabled="f.processing === 2" @click="onCancelSent(f)">
+                            {{ f.processing === 2 ? '…' : '撤回' }}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
               </div>
             </el-popover>
 
@@ -98,6 +154,10 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   getNotifications, getUnreadCount, markNotificationRead, markAllRead,
 } from './utils/notificationApi'
+import {
+  acceptFriend, rejectFriend,
+  incomingRequests as fetchIncoming, sentRequests as fetchSent,
+} from './utils/friendshipApi'
 
 const route = useRoute()
 const router = useRouter()
@@ -139,6 +199,12 @@ async function loadNotifs() {
   finally { notifLoading.value = false }
 }
 
+// 打开面板：同时刷新消息通知与好友申请两块
+function openPanel() {
+  loadNotifs()
+  loadFriends()
+}
+
 async function openNotification(n) {
   if (n.isRead === 0) {
     try {
@@ -147,9 +213,50 @@ async function openNotification(n) {
       unread.value = Math.max(0, unread.value - 1)
     } catch (e) { /* 静默 */ }
   }
-  // type 1/2 → 动态或照片，跳详情/墙；3/4 → 动态详情
+  // type 1/2 → 动态或照片，跳详情/墙；3/4 → 动态详情；5/6 → 好友申请，跳对方主页
   if (n.type === 2) router.push('/photowall')
-  else if (n.targetId) router.push(`/detail/${n.targetId}`)
+  else if (n.type === 5 || n.type === 6) {
+    if (n.actorId) router.push(`/profile/${n.actorId}`)
+  } else if (n.targetId) router.push(`/detail/${n.targetId}`)
+}
+
+/* ---------------- 好友申请（就地同意 / 拒绝 / 撤回） ---------------- */
+const friendIncoming = ref([])
+const friendSent = ref([])
+
+// 拉取收到的 / 发出的申请（纯待办列表，收到就常驻，处理后自动移除）
+async function loadFriends() {
+  if (!localStorage.getItem('token')) return
+  try {
+    const [inc, sent] = await Promise.all([fetchIncoming(), fetchSent()])
+    friendIncoming.value = inc || []
+    friendSent.value = sent || []
+  } catch (e) { /* 静默 */ }
+}
+
+async function onAccept(f) {
+  f.processing = 1
+  try {
+    await acceptFriend(f.id)
+    friendIncoming.value = friendIncoming.value.filter((x) => x.id !== f.id)
+  } catch (e) { /* 拦截器已提示 */ } finally { f.processing = 0 }
+}
+
+async function onReject(f) {
+  f.processing = 2
+  try {
+    await rejectFriend(f.id)
+    friendIncoming.value = friendIncoming.value.filter((x) => x.id !== f.id)
+  } catch (e) { /* 拦截器已提示 */ } finally { f.processing = 0 }
+}
+
+async function onCancelSent(f) {
+  f.processing = 2
+  try {
+    // 发出的申请"撤回"：后端 reject 会删除该记录（from_user=meId 的那条）
+    await rejectFriend(f.id)
+    friendSent.value = friendSent.value.filter((x) => x.id !== f.id)
+  } catch (e) { /* 拦截器已提示 */ } finally { f.processing = 0 }
 }
 
 async function readAll() {
@@ -562,5 +669,90 @@ watch(
   height: 7px;
   border-radius: 50%;
   background: #b4647a;
+}
+
+/* 好友申请区块 */
+.friend-section {
+  border-top: 1px solid rgba(232, 217, 181, 0.14);
+}
+.friend-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 6px;
+  font-family: var(--font-brush);
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: var(--c-gold);
+}
+.friend-sub {
+  padding: 8px 16px 2px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.4);
+}
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+.friend-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.friend-name {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.friend-name-sub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.38);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.friend-actions {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+.friend-accept,
+.friend-reject {
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 3px 10px;
+  border-radius: 2px;
+  cursor: pointer;
+  background: transparent;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.friend-accept {
+  color: var(--c-gold);
+  border: 1px solid var(--c-gold-dim);
+}
+.friend-accept:hover:not(:disabled) {
+  background: rgba(232, 217, 181, 0.1);
+  border-color: var(--c-gold);
+}
+.friend-reject {
+  color: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.friend-reject:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+.friend-accept:disabled,
+.friend-reject:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 </style>
