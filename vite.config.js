@@ -8,12 +8,28 @@
 // 后端换端口/上线时，只改这里的 target 即可。
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import AutoImport from 'unplugin-auto-import/vite'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // 后端地址（改端口只改这一行）
 const BACKEND = 'http://localhost:8080'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    // Element Plus 按需：模板里的 <el-button> 与脚本里的 ElMessage/ElMessageBox
+    // 都自动 import，顺带只带对应组件的 css。
+    // 全站实际只用到 9 个组件，整包引入要多背 ~1.4MB。
+    AutoImport({
+      resolvers: [ElementPlusResolver()],
+      dts: false,
+    }),
+    Components({
+      resolvers: [ElementPlusResolver({ directives: true })],
+      dts: false,
+    }),
+  ],
   server: {
     port: 5173,
     strictPort: true,
@@ -32,14 +48,14 @@ export default defineConfig({
     },
   },
   build: {
-    // 首屏包 1.2MB 偏大（主要是 Element Plus 全量引入），生产打包时按依赖拆包，
-    // 让 Vue / Element Plus 各自成为可长期缓存的独立 chunk
+    // 注意：manualChunks 里不要再写 'element-plus': ['element-plus']，
+    // 那等于强行把整包拉进来，按需引入会被完全抵消（实测 JS 仍 946kB）。
+    // 拆包交给 rollup 按实际引用自动分。
     chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
         manualChunks: {
           vue: ['vue', 'vue-router'],
-          'element-plus': ['element-plus'],
           axios: ['axios'],
         },
       },

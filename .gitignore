@@ -20,5 +20,8 @@ bili_pl.json
 f1.jpg
 f2.jpg
 
-# 本地备份目录，不入库
-.bak_glass/
+# 本地备份目录，不入库（.bak_glass / .bak_blue / .bak_frame / .bak_warm …）
+.bak_*/
+
+# 调试脚本 / 截图（CDP 巡检用），不入库
+.tmp/

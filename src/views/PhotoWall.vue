@@ -132,8 +132,13 @@
               >
                 <span class="tape"></span>
                 <div class="polaroid-frame">
-                  <div class="polaroid-img landscape">
-                    <img :src="imgUrl(photo.url)" :alt="photo.caption || '照片'" loading="lazy" />
+                  <div class="polaroid-img" :style="{ '--ar': aspects[photo.id] || 1.3333 }">
+                    <img
+                      :src="imgUrl(photo.url)"
+                      :alt="photo.caption || '照片'"
+                      loading="lazy"
+                      @load="onPhotoLoad($event, photo)"
+                    />
                   </div>
                 </div>
                 <span v-if="photo.caption" class="polaroid-caption">{{ photo.caption }}</span>
@@ -195,8 +200,13 @@
             >
               <span class="tape"></span>
               <div class="polaroid-frame">
-                <div class="polaroid-img landscape">
-                  <img :src="imgUrl(photo.url)" :alt="photo.caption || '照片'" loading="lazy" />
+                <div class="polaroid-img" :style="{ '--ar': aspects[photo.id] || 1.3333 }">
+                  <img
+                    :src="imgUrl(photo.url)"
+                    :alt="photo.caption || '照片'"
+                    loading="lazy"
+                    @load="onPhotoLoad($event, photo)"
+                  />
                 </div>
               </div>
               <span v-if="photo.caption" class="polaroid-caption">{{ photo.caption }}</span>
@@ -215,9 +225,16 @@
       </template>
     </template>
 
-    <!-- 灯箱 -->
+    <!-- 灯箱：左图右笺 —— 照片本来就是某篇文字的配图，展开时不能把它从文章里撕下来 -->
     <transition name="lb-fade">
-      <div v-if="lightboxOpen" class="lightbox" @click="closeLightbox">
+      <div
+        v-if="lightboxOpen"
+        class="lightbox"
+        :class="{ 'is-full': fullView }"
+        @click="closeLightbox"
+        @touchstart.passive="onTouchStart"
+        @touchend="onTouchEnd"
+      >
         <div class="lb-backdrop"></div>
         <button class="lb-close" @click.stop="closeLightbox" aria-label="关闭">×</button>
         <button
@@ -226,30 +243,77 @@
           @click.stop="prevPhoto"
           aria-label="上一张"
         >‹</button>
-        <transition name="lb-slide" mode="out-in">
-          <div class="lb-stage" :key="photos[lightboxIndex]?.id" @click.stop>
-            <img :src="imgUrl(photos[lightboxIndex]?.url)" :alt="photos[lightboxIndex]?.caption || '照片'" />
-            <p v-if="photos[lightboxIndex]?.caption" class="lb-caption">{{ photos[lightboxIndex].caption }}</p>
-            <p v-if="mode === 'anniversary' && photos[lightboxIndex]?.yearsAgo" class="lb-years">
-              {{ photos[lightboxIndex].yearsAgo }} 年前的今天
+
+        <div v-if="currentPhoto" class="lb-stage" @click.stop>
+          <figure class="lb-figure">
+            <img
+              :key="currentPhoto.id"
+              class="lb-photo"
+              :src="imgUrl(currentPhoto.url)"
+              :alt="currentPhoto.caption || '照片'"
+              @dblclick="toggleFull"
+            />
+            <!-- 相纸边：图片不能裸在黑底上，底部留一条纸，写题与页码 -->
+            <figcaption class="lb-plate">
+              <span class="lb-plate-cap">
+                {{ currentPhoto.caption || '无题' }}
+                <em
+                  v-if="mode === 'anniversary' && currentPhoto.yearsAgo"
+                  class="lb-plate-years"
+                >{{ currentPhoto.yearsAgo }} 年前的今天</em>
+              </span>
+              <span class="lb-plate-right">
+                <span class="lb-plate-like" @click.stop>
+                  <LikeButton
+                    :target-id="currentPhoto.id"
+                    :target-type="3"
+                    :initial="currentPhoto.likeCount || 0"
+                  />
+                </span>
+                <span class="lb-plate-idx">{{ lightboxIndex + 1 }} / {{ photos.length }}</span>
+                <button
+                  class="lb-plate-full"
+                  :title="fullView ? '退出细看' : '细看这张'"
+                  aria-label="细看"
+                  @click.stop="toggleFull"
+                >⤢</button>
+              </span>
+            </figcaption>
+          </figure>
+
+          <!-- 笺：这张照片出自的那一篇。取不到就整栏不出现，退回纯图片 -->
+          <aside v-if="momentInfo" class="lb-note" :key="'note-' + momentInfo.id">
+            <span class="lb-note-kicker">出 自</span>
+            <h3 v-if="momentInfo.title" class="lb-note-title">{{ momentInfo.title }}</h3>
+            <p class="lb-note-text" :class="{ 'is-lead': !momentInfo.title }">
+              {{ momentInfo.content || '这一篇只留了图，没有字。' }}
             </p>
-            <div class="lb-like" @click.stop>
-              <LikeButton
-                v-if="photos[lightboxIndex]"
-                :target-id="photos[lightboxIndex].id"
-                :target-type="3"
-                :initial="photos[lightboxIndex].likeCount || 0"
-              />
-            </div>
-          </div>
-        </transition>
+            <p class="lb-note-meta">
+              <span>{{ noteDate }}</span>
+              <template v-if="momentInfo.location">
+                <span class="lb-note-sep">·</span>
+                <span>{{ momentInfo.location }}</span>
+              </template>
+            </p>
+            <router-link :to="`/detail/${momentInfo.id}`" class="lb-note-more">读全文 →</router-link>
+          </aside>
+        </div>
+
         <button
           v-if="photos.length > 1"
           class="lb-nav lb-next"
           @click.stop="nextPhoto"
           aria-label="下一张"
         >›</button>
-        <div class="lb-counter">{{ lightboxIndex + 1 }} / {{ photos.length }}</div>
+
+        <!-- 底部进度：不打扰，但让人知道「我翻到哪了」 -->
+        <div v-if="photos.length > 1" class="lb-progress">
+          <span
+            class="lb-progress-fill"
+            :style="{ width: ((lightboxIndex + 1) / photos.length) * 100 + '%' }"
+          ></span>
+        </div>
+        <button v-if="fullView" class="lb-full-exit" @click.stop="toggleFull">退出细看</button>
       </div>
     </transition>
     </template>
@@ -257,8 +321,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import axios from 'axios'
 import {
   getMyPhotosGrouped, getAnniversaryPhotosGrouped, getOtherPhotosGrouped,
   getYearPhotosGrouped, getPhotoWallVisibility, setPhotoWallVisibility,
@@ -267,6 +332,7 @@ import {
 import { requestFriend } from '../utils/friendshipApi'
 import LikeButton from '../components/LikeButton.vue'
 import AlbumManager from '../components/AlbumManager.vue'
+import { imgUrl } from '../utils/url'
 
 const route = useRoute()
 const router = useRouter()
@@ -325,11 +391,67 @@ const photos = computed(() => mode.value === 'friends'
   ? friendGroups.value.flatMap((g) => g.photos || [])
   : groups.value.flatMap((g) => g.photos || []))
 
-function imgUrl(url) {
-  if (!url) return ''
-  if (/^https?:\/\//.test(url)) return url
-  // 相对路径即可，由 vite proxy 的 /images 规则转发到后端
-  return url.startsWith('/') ? url : '/' + url
+const currentPhoto = computed(() => photos.value[lightboxIndex.value] || null)
+
+/* 灯箱的「细看」模式：双击把照片放到 96vw×88vh，藏起笺与相纸边。
+   不做像素级缩放 —— 这些是随手拍的片子，人要的是「看大一点」，不是数像素。 */
+const fullView = ref(false)
+
+/* 照片真实宽高比。后端的 moment_image 只有 url，没有宽高，
+   所以只能等图加载完读 naturalWidth；读到前先用 4:3 占位。
+   竖图以前被硬裁成 4:3（人像、天空都缺半截），现在按真比例显示。 */
+const aspects = ref({})
+function onPhotoLoad(e, photo) {
+  const img = e.target
+  if (!img?.naturalWidth || !img.naturalHeight) return
+  // 极端长图（全景、截屏）会把整面墙拉歪，钳在 0.66–1.8 之间
+  const ratio = Math.min(1.8, Math.max(0.66, img.naturalWidth / img.naturalHeight))
+  if (Math.abs((aspects.value[photo.id] || 0) - ratio) < 0.01) return
+  aspects.value = { ...aspects.value, [photo.id]: ratio }
+}
+
+/* 灯箱右侧的「笺」：当前照片出自的那篇动态。
+   接口里的 WallPhotoVO 已经带了 momentId，但列表里没有正文，
+   所以展开时补拉一次详情；按 momentId 缓存，来回翻不重复请求。 */
+const momentInfo = ref(null)
+const momentCache = new Map()
+let momentSeq = 0   // 连续切图时丢弃过期响应
+
+async function loadMomentFor(index) {
+  const mid = photos.value[index]?.momentId
+  const seq = ++momentSeq
+  if (!mid) {
+    momentInfo.value = null
+    return
+  }
+  if (momentCache.has(mid)) {
+    momentInfo.value = momentCache.get(mid)
+    return
+  }
+  momentInfo.value = null
+  try {
+    const res = await axios.get(`/moments/${mid}`)
+    if (seq !== momentSeq) return
+    const data = res.data?.data
+    if (data) {
+      momentCache.set(mid, data)
+      momentInfo.value = data
+    }
+  } catch (e) {
+    // 原文取不到就只显示图，不打扰用户
+    if (seq === momentSeq) momentInfo.value = null
+  }
+}
+
+const noteDate = computed(() => fmtNoteDate(momentInfo.value?.createTime))
+
+function fmtNoteDate(t) {
+  if (!t) return ''
+  const d = new Date(String(t).replace(' ', 'T'))
+  if (Number.isNaN(d.getTime())) return ''
+  const md = `${d.getMonth() + 1}月${d.getDate()}日`
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return d.getFullYear() === new Date().getFullYear() ? `${md} ${hm}` : `${d.getFullYear()}年${md}`
 }
 
 function monthKey(g) {
@@ -474,12 +596,17 @@ function selectYear(year) {
 function openLightbox(index) {
   lightboxIndex.value = index
   lightboxOpen.value = true
+  fullView.value = false
   document.body.style.overflow = 'hidden'
+  preloadNeighbors(index)
 }
 
 function closeLightbox() {
   lightboxOpen.value = false
+  fullView.value = false
   document.body.style.overflow = ''
+  momentSeq++            // 关掉时丢弃还在路上的详情响应
+  momentInfo.value = null
 }
 
 function prevPhoto() {
@@ -492,12 +619,65 @@ function nextPhoto() {
   if (n > 1) lightboxIndex.value = (lightboxIndex.value + 1) % n
 }
 
+/* 预取相邻两张：切图时图已在缓存里，不会白闪一下再出现。
+   只取 ±2，取多了等于把整本相册下载一遍。 */
+const preloaded = new Set()
+function preloadNeighbors(index) {
+  const n = photos.value.length
+  for (const d of [1, -1, 2, -2]) {
+    if (n <= 1) break
+    const p = photos.value[(index + d + n * 2) % n]
+    if (!p?.url) continue
+    const src = imgUrl(p.url)
+    if (preloaded.has(src)) continue
+    preloaded.add(src)
+    const im = new Image()
+    im.src = src
+  }
+}
+
+function toggleFull() {
+  fullView.value = !fullView.value
+}
+
+/* 触屏左右滑动切图。纵向滚动 / 细看模式下的拖动都不算。 */
+let touchStart = null
+function onTouchStart(e) {
+  if (fullView.value) return
+  const t = e.changedTouches?.[0]
+  if (!t) return
+  touchStart = { x: t.clientX, y: t.clientY, at: Date.now() }
+}
+function onTouchEnd(e) {
+  const s = touchStart
+  touchStart = null
+  if (!s) return
+  const t = e.changedTouches?.[0]
+  if (!t) return
+  const dx = t.clientX - s.x
+  const dy = t.clientY - s.y
+  // 横向位移要够长、且明显大于竖向，否则是在上下滚页面或误触
+  if (Math.abs(dx) < 46 || Math.abs(dx) < Math.abs(dy) * 1.4) return
+  if (Date.now() - s.at > 800) return
+  if (dx < 0) nextPhoto()
+  else prevPhoto()
+}
+
 function onKeydown(e) {
   if (!lightboxOpen.value) return
-  if (e.key === 'Escape') closeLightbox()
-  else if (e.key === 'ArrowLeft') prevPhoto()
+  if (e.key === 'Escape') {
+    if (fullView.value) fullView.value = false
+    else closeLightbox()
+  } else if (e.key === 'ArrowLeft') prevPhoto()
   else if (e.key === 'ArrowRight') nextPhoto()
 }
+
+// 打开或切换照片时，补拉这一张所属的那篇（有缓存则瞬间出），并预取相邻
+watch([lightboxOpen, lightboxIndex], ([open, idx]) => {
+  if (!open) return
+  loadMomentFor(idx)
+  preloadNeighbors(idx)
+})
 
 let stopWatch = null
 onMounted(async () => {
@@ -887,7 +1067,9 @@ onBeforeUnmount(() => {
 }
 .polaroid-img {
   overflow: hidden;
-  aspect-ratio: 4 / 3;
+  /* 每张按自己的真实宽高比排（--ar 由图片 onload 读 naturalWidth 写入）。
+     原来一律 4:3，竖构图的人像和天空都被切掉半截。 */
+  aspect-ratio: var(--ar, 4 / 3);
 }
 .polaroid-img img {
   width: 100%;
@@ -944,9 +1126,16 @@ onBeforeUnmount(() => {
   bottom: 7px;
   right: 10px;
   z-index: 3;
+  /* 包裹层自己也要定深色：它继承的是页面主文字色（近白），
+     在米白相纸上等于隐形，将来往里加任何字都会中招 */
+  color: #6b675e;
 }
-.polaroid-like :deep(.like-btn) { color: #8a857a; }
-.polaroid-like :deep(.like-btn.liked) { color: #b4647a; }
+/* 相纸是米白的，全局 --txt-3 那套浅灰在上面几乎看不见。
+   取 #6b675e：在 rgb(233,230,222) 上对比度约 4.6，过 AA，又不至于比题字更抢眼。
+   灯箱纸边用同一组色，两处才是同一张纸。 */
+.polaroid-like :deep(.like-btn) { color: #6b675e; }
+.polaroid-like :deep(.like-btn:hover) { color: #3a352d; }
+.polaroid-like :deep(.like-btn.liked) { color: #a8546c; }
 .polaroid-like :deep(.heart) { font-size: 14px; }
 .polaroid-like :deep(.num) { font-size: 11px; }
 
@@ -956,7 +1145,8 @@ onBeforeUnmount(() => {
   margin-top: 44px;
   font-size: 12px;
   letter-spacing: 4px;
-  color: var(--c-gold-faint);
+  /* 原为 --c-gold-faint（0.14），实测对比度 1.34，等于没写 */
+  color: rgba(222, 217, 203, 0.5);
 }
 
 /* ---------- 灯箱 ---------- */
@@ -967,47 +1157,193 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* 左右留出翻页键的槽位：原来图几乎贴着屏幕边，‹ 箭头有一半压在图上 */
+  padding: 0 96px;
 }
 .lb-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(5, 6, 9, 0.9);
-  backdrop-filter: blur(6px);
+  /* 0.9 时下面的拍立得网格会隐约透出来，正文压在上面就脏了；
+     压到 0.975 保留一点空间感，又不至于干扰阅读 */
+  background: rgba(8, 9, 12, 0.985);
+  backdrop-filter: blur(20px);
 }
+/* 左图右笺：图按自身比例铺开，右侧一条窄栏放这篇的原文 */
 .lb-stage {
   position: relative;
   z-index: 2;
-  max-width: 88vw;
-  max-height: 84vh;
+  display: flex;
+  flex-direction: row;
+  /* 顶部对齐：图的顶边和「出自」那行齐平，读起来才像一篇排版好的稿子 */
+  align-items: flex-start;
+  gap: 38px;
+  max-width: 100%;
+  max-height: 92vh;
+}
+.lb-figure {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  min-width: 0;
+  flex: 0 1 auto;
+  margin: 0;
 }
-.lb-stage img {
-  max-width: 88vw;
-  max-height: 74vh;
-  object-fit: contain;
-  border-radius: 4px;
+.lb-photo {
+  display: block;
+  max-width: 100%;
+  /* 68vh：给相纸边、关闭键和底部进度留出空间；
+     切换照片时高度会跟着比例变，这是对的 —— 照片本来就该是它自己的形状 */
+  max-height: min(68vh, 640px);
+  width: auto;
+  height: auto;
+  border-radius: 3px 3px 0 0;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.8);
   border: 1px solid rgba(222, 217, 203, 0.14);
+  border-bottom: none;
+  animation: lb-photo-in 0.34s cubic-bezier(0.22, 0.8, 0.3, 1);
 }
-.lb-caption {
-  margin: 16px 0 0;
-  font-family: Georgia, serif;
-  font-style: italic;
+/* 切图不再整块缩放：只让新图淡入，旧图立刻让位，翻页是「换一张」不是「转场」 */
+@keyframes lb-photo-in {
+  from { opacity: 0; transform: scale(0.985); }
+  to { opacity: 1; transform: scale(1); }
+}
+/* 相纸下沿：图片不该裸在黑底上，留一条纸写题与页码 */
+.lb-plate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 44px;
+  padding: 9px 14px;
+  background: rgba(238, 234, 226, 0.94);
+  border-radius: 0 0 3px 3px;
+  box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.7);
+}
+.lb-plate-cap {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  font-family: Georgia, 'Songti SC', serif;
   font-size: 14px;
   letter-spacing: 1px;
-  color: rgba(255, 255, 255, 0.7);
-  text-align: center;
+  color: #3a342d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.lb-years {
-  margin: 6px 0 0;
-  font-size: 12px;
+.lb-plate-years {
+  font-size: 11px;
+  font-style: normal;
   letter-spacing: 2px;
-  color: var(--c-gold-dim);
+  color: #8a7d68;
 }
-.lb-like {
-  margin-top: 14px;
+.lb-plate-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+}
+/* 相纸是浅色，全局的暗色点赞变量在这条纸上几乎看不见，就地覆盖 */
+.lb-plate-like :deep(.like-btn) { color: #6b675e; }
+.lb-plate-like :deep(.like-btn.liked) { color: #a8546c; }
+.lb-plate-idx {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #8a7d68;
+  font-variant-numeric: tabular-nums;
+}
+/* 相纸右下角的「细看」：双击能放大，但双击是藏起来的动作，得有个看得见的入口 */
+.lb-plate-full {
+  width: 22px;
+  height: 22px;
+  margin-left: -4px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  line-height: 1;
+  color: #8a7d68;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.lb-plate-full:hover { color: #3a342d; border-color: rgba(58, 52, 45, 0.3); }
+
+/* 右侧笺栏 */
+.lb-note {
+  width: 300px;
+  flex: none;
+  /* 拉到与图片等高：一根竖线贯穿整张照片，像杂志的边栏，
+     而不是一小段悬在半空的字 */
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  /* 顶边与图片齐平（图有 1px 边框，这里补 1px 视觉对齐） */
+  padding: 1px 2px 2px 24px;
+  border-left: 1px solid rgba(222, 217, 203, 0.16);
+  max-height: 68vh;
+  overflow: hidden;
+  animation: lb-note-in 0.45s ease 0.05s both;
+}
+@keyframes lb-note-in {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.lb-note-kicker {
+  font-size: 11px;
+  letter-spacing: 5px;
+  color: var(--c-gold);
+  opacity: 0.85;
+}
+.lb-note-title {
+  margin: 0;
+  font-family: 'Ma Shan Zheng', 'ZCOOL XiaoWei', Georgia, serif;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 2px;
+  color: rgba(245, 242, 236, 0.96);
+}
+.lb-note-text {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 2;
+  color: rgba(240, 237, 231, 0.72);
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.lb-note-text.is-lead {
+  font-size: 14.5px;
+  color: rgba(240, 237, 231, 0.86);
+}
+.lb-note-meta {
+  margin: 0;
+  /* 把日期与「读全文」压到栏底：一块笺，上下都有落点 */
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  letter-spacing: 1.5px;
+  color: rgba(222, 217, 203, 0.5);
+}
+.lb-note-sep { opacity: 0.6; }
+.lb-note-more {
+  align-self: flex-start;
+  font-size: 12.5px;
+  letter-spacing: 2px;
+  color: var(--c-gold);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color 0.25s ease, border-color 0.25s ease;
+}
+.lb-note-more:hover {
+  color: #f4eeda;
+  border-bottom-color: rgba(232, 217, 181, 0.5);
 }
 .lb-close, .lb-nav {
   position: absolute;
@@ -1041,28 +1377,106 @@ onBeforeUnmount(() => {
   font-size: 30px;
   line-height: 1;
 }
-.lb-prev { left: 32px; }
-.lb-next { right: 32px; }
-.lb-counter {
-  position: absolute;
-  bottom: 26px;
-  left: 0;
-  right: 0;
-  z-index: 3;
-  text-align: center;
-  font-size: 13px;
-  letter-spacing: 2px;
-  color: rgba(255, 255, 255, 0.5);
-}
+.lb-prev { left: 28px; }
+.lb-next { right: 28px; }
 .lb-fade-enter-active, .lb-fade-leave-active { transition: opacity 0.3s ease; }
 .lb-fade-enter-from, .lb-fade-leave-to { opacity: 0; }
-.lb-slide-enter-active, .lb-slide-leave-active { transition: opacity 0.25s ease, transform 0.25s ease; }
-.lb-slide-enter-from { opacity: 0; transform: scale(0.96); }
-.lb-slide-leave-to { opacity: 0; transform: scale(1.03); }
+
+/* 细看模式：藏起笺与相纸，只留照片。双击切换 */
+.lightbox.is-full { padding: 0 80px; }
+.lightbox.is-full .lb-note,
+.lightbox.is-full .lb-plate { display: none; }
+.lightbox.is-full .lb-photo {
+  max-height: 88vh;
+  max-width: 100%;
+  border-radius: 3px;
+  border-bottom: 1px solid rgba(222, 217, 203, 0.14);
+}
+.lb-full-exit {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 6px 18px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: rgba(240, 237, 231, 0.72);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(222, 217, 203, 0.2);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.lb-full-exit:hover {
+  color: var(--c-gold);
+  border-color: var(--c-gold);
+  background: rgba(222, 217, 203, 0.12);
+}
+
+/* 底部进度：翻到第几张，一条线就说完了，不必再加一个计数器 */
+.lb-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  height: 2px;
+  background: rgba(222, 217, 203, 0.08);
+}
+.lb-progress-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(232, 217, 181, 0.35), rgba(232, 217, 181, 0.75));
+  transition: width 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
 /* ---------- 响应式 ---------- */
 @media (max-width: 900px) {
   .polaroid-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px 18px; }
+
+  /* 灯箱：竖屏放不下左右两栏，改为图在上、笺在下 */
+  .lightbox { padding: 0 16px; }
+  .lightbox.is-full { padding: 0 12px; }
+  .lb-stage {
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    max-width: 100%;
+    /* 底部留出翻页按钮的位置，否则箭头会压在相纸上 */
+    max-height: 82vh;
+  }
+  .lb-photo { max-height: 56vh; }
+  .lightbox.is-full .lb-photo { max-height: 84vh; }
+  /* 箭头从「贴图两侧」改成「屏幕底部」：
+     手机上 46px 的圆浮在图片左右边缘，拇指够不到，还会挡住相纸 */
+  .lb-nav {
+    top: auto;
+    bottom: 18px;
+    transform: none;
+    width: 40px;
+    height: 40px;
+    font-size: 24px;
+  }
+  .lb-prev { left: 18px; }
+  .lb-next { right: 18px; }
+  .lb-note {
+    width: min(100%, 520px);
+    max-height: none;
+    gap: 8px;
+    padding: 14px 0 0;
+    border-left: none;
+    border-top: 1px solid rgba(222, 217, 203, 0.16);
+  }
+  .lb-note-title { font-size: 17px; }
+  .lb-note-text {
+    font-size: 12.5px;
+    line-height: 1.9;
+    -webkit-line-clamp: 4;
+  }
+  .lb-note-text.is-lead { font-size: 13px; }
+  .lb-note-more { margin-top: 4px; }
 }
 @media (max-width: 600px) {
   .wall-page { padding: 32px 16px 60px; }
@@ -1072,5 +1486,32 @@ onBeforeUnmount(() => {
   .lb-prev { left: 12px; }
   .lb-next { right: 12px; }
   .lb-close { top: 16px; right: 16px; }
+
+  /* 5 个胶囊在 390px 下总宽超过视口，居中布局把第一个顶出左边界 5px，
+     文字又被压成一字一行，配 999px 圆角直接变成一排圆球。
+     这里允许换行，并禁止标签内部折字。 */
+  .wall-tabs {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 22px;
+  }
+  .wall-tab {
+    flex: none;
+    padding: 6px 14px;
+    font-size: 12.5px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+  .visibility-row {
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    margin: -6px 0 24px;
+  }
+  .visibility-label { flex: 1 0 100%; text-align: center; }
+  .visibility-toggle {
+    flex: none;
+    padding: 6px 12px;
+    white-space: nowrap;
+  }
 }
 </style>

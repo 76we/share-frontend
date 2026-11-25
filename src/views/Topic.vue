@@ -18,49 +18,16 @@
       <!-- 动态列表 -->
       <section class="topic-body">
         <div v-loading="loading" class="card-list">
-          <div
+          <!-- 与个人中心同一套卡片组件，只多一个「卷内序号」 -->
+          <MomentCard
             v-for="(m, idx) in moments"
             :key="m.id"
-            class="moment-card nr-card nr-glow card-enter"
+            :moment="m"
+            variant="ink"
+            :index="idx"
+            class="card-enter"
             :style="{ animationDelay: Math.min(idx, 8) * 0.08 + 's' }"
-            @click="router.push(`/detail/${m.id}`)"
-          >
-            <span class="card-index">{{ idx + 1 < 10 ? '0' + (idx + 1) : idx + 1 }}</span>
-
-            <div class="moment-author author-link" :title="'看看 ' + (m.nickname || 'TA') + ' 的主页'" @click.stop="goProfile(m.userId)">
-              <span class="avatar-ring">
-                <img class="avatar" :src="imgUrl(m.avatar)" alt="avatar" />
-              </span>
-              <div class="author-info">
-                <span class="nickname">{{ m.nickname }}</span>
-                <span class="author-time">{{ formatTime(m.createTime) }}</span>
-              </div>
-            </div>
-
-            <h2 class="moment-title" v-if="m.title">{{ m.title }}</h2>
-            <p class="moment-content">{{ m.content }}</p>
-
-            <div class="moment-images" :class="'imgs-' + Math.min(m.images?.length || 0, 9)" v-if="m.images?.length">
-              <img
-                v-for="(img, i) in m.images"
-                :key="i"
-                class="grid-img"
-                :src="imgUrl(img)"
-                :alt="m.title"
-                @click.stop="preview(m, i)"
-              />
-            </div>
-
-            <div class="moment-meta">
-              <span v-if="m.location" class="meta-chip">📍 {{ m.location }}</span>
-              <span v-if="m.mood" class="meta-chip">心情 · {{ m.mood }}</span>
-              <span class="meta-stats">
-                <LikeButton :targetId="m.id" :targetType="1" :initial="m.likeCount ?? 0" />
-                <span>✎ {{ m.commentCount ?? 0 }}</span>
-                <CollectButton :momentId="m.id" :initial="m.collectCount ?? 0" />
-              </span>
-            </div>
-          </div>
+          />
         </div>
 
         <!-- 空状态 -->
@@ -83,8 +50,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import LikeButton from '../components/LikeButton.vue'
-import CollectButton from '../components/CollectButton.vue'
+import MomentCard from '../components/MomentCard.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -106,7 +72,12 @@ async function fetchTopic() {
   } catch (e) { /* 拦截器已提示 */ }
 }
 
+/* 话题页会在 /topic/1 → /topic/2 之间原地复用组件，上一个话题的响应
+   可能后到；seq 对号，过期响应丢弃，避免「切到旅行却显示美食」。 */
+let listSeq = 0
+
 async function fetchMoments(reset = true) {
+  const seq = ++listSeq
   if (reset) {
     page.value = 1
     moments.value = []
@@ -116,13 +87,14 @@ async function fetchMoments(reset = true) {
     const res = await axios.get('/moments/list', {
       params: { page: page.value, size, topicId: topicId.value },
     })
+    if (seq !== listSeq) return
     const data = res.data?.data ?? {}
     moments.value = reset ? (data.records ?? []) : [...moments.value, ...(data.records ?? [])]
     total.value = Number(data.total ?? 0)
     hasMore.value = data.current < data.pages
   } catch (e) {
   } finally {
-    loading.value = false
+    if (seq === listSeq) loading.value = false
   }
 }
 
@@ -130,25 +102,6 @@ async function loadMore() {
   if (loading.value || !hasMore.value) return
   page.value += 1
   await fetchMoments(false)
-}
-
-function goProfile(userId) {
-  if (userId != null) router.push(`/profile/${userId}`)
-}
-function imgUrl(img) {
-  if (!img) return ''
-  if (img.startsWith('http') || img.startsWith('//')) return img
-  return img.startsWith('/') ? img : '/' + img
-}
-function preview(m, i) {
-  window.open(imgUrl(m.images?.[i]), '_blank')
-}
-function formatTime(t) {
-  if (!t) return ''
-  const d = new Date(t)
-  if (isNaN(d.getTime())) return String(t)
-  const p = (n) => (n < 10 ? '0' + n : n)
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 onMounted(() => {
@@ -220,80 +173,8 @@ watch(topicId, () => {
 .topic-count { font-size: 11px; letter-spacing: 2px; color: var(--txt-3); margin: 0; }
 
 .card-list { display: flex; flex-direction: column; gap: 18px; }
-.moment-card {
-  position: relative;
-  padding: 20px 22px;
-  cursor: pointer;
-  transition: border-color .25s, box-shadow .25s;
-}
-.moment-card:hover { border-color: var(--card-border-hover); box-shadow: 0 4px 24px rgba(0, 0, 0, .3); }
-.card-index {
-  position: absolute;
-  top: 16px;
-  right: 20px;
-  font-size: 12px;
-  letter-spacing: 1px;
-  color: var(--c-gold-faint);
-  opacity: .5;
-}
-.moment-author { display: flex; align-items: center; gap: 12px; }
-.author-link { cursor: pointer; }
-.author-link:hover .nickname { color: var(--c-gold); }
-.avatar-ring {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  overflow: hidden;
-  border: 1px solid var(--c-gold-dim);
-  background: var(--fill);
-}
-.avatar { width: 100%; height: 100%; object-fit: cover; }
-.author-info { display: flex; flex-direction: column; }
-.nickname { font-size: 13px; color: var(--txt-1); letter-spacing: 1px; }
-.author-time { font-size: 11px; color: var(--txt-3); margin-top: 2px; }
-.moment-title {
-  font-family: var(--font-brush);
-  font-size: 22px;
-  font-weight: 400;
-  letter-spacing: 2px;
-  color: #f0f0f0;
-  margin: 14px 0 6px;
-}
-.moment-content {
-  font-size: 13px;
-  line-height: 1.8;
-  color: var(--txt-2);
-  margin: 8px 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.moment-images { display: grid; gap: 6px; margin: 12px 0; grid-template-columns: repeat(3, 1fr); }
-.moment-images.imgs-1 { grid-template-columns: 1fr; max-width: 360px; }
-.moment-images.imgs-4 { grid-template-columns: repeat(2, 1fr); }
-.grid-img {
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  border-radius: 2px;
-  border: 1px solid var(--card-border);
-}
-.moment-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-  font-size: 12px;
-  color: var(--txt-3);
-}
-.meta-chip {
-  padding: 3px 10px;
-  border: 1px solid var(--card-border);
-  border-radius: 2px;
-}
-.meta-stats { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+/* 卡片本体在 <MomentCard variant="ink">（与个人中心同一套），
+   这里只留列表间距与入场动画。 */
 
 .empty { text-align: center; padding: 54px 0; }
 .empty-seal {

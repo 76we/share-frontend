@@ -6,7 +6,7 @@
   <div class="comment-node" :class="{ 'is-top': level === 0 }">
     <!-- 当前评论 -->
     <div class="c-body">
-      <img class="c-avatar" :src="imgUrl(comment.commentAvatar)" alt="avatar" />
+      <UserAvatar class="c-avatar" :src="imgUrl(comment.commentAvatar)" :name="comment.commentUsername" />
       <div class="c-main">
         <div class="c-line1">
           <span class="c-name">{{ comment.commentUsername }}</span>
@@ -52,6 +52,9 @@
 // 这样递归同步渲染，避免异步加载导致的闪烁与构建警告。
 
 import LikeButton from './LikeButton.vue'
+import UserAvatar from './UserAvatar.vue'
+import { imgUrl } from '../utils/url'
+import { formatTime } from '../utils/format'
 
 defineProps({
   comment: { type: Object, required: true },   // CommentVO
@@ -62,19 +65,6 @@ defineProps({
 
 defineEmits(['reply', 'delete'])
 
-function imgUrl(img) {
-  if (!img) return ''
-  if (img.startsWith('http') || img.startsWith('//')) return img
-  return img.startsWith('/') ? img : '/' + img
-}
-
-function formatTime(t) {
-  if (!t) return ''
-  const d = new Date(t)
-  if (isNaN(d.getTime())) return String(t)
-  const p = (n) => (n < 10 ? '0' + n : n)
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`
-}
 </script>
 
 <style scoped>

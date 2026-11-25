@@ -74,56 +74,15 @@
         </div>
 
         <div class="tab-body" v-loading="loading">
-          <!-- 动态卡片列表（三个标签复用） -->
+          <!-- 动态卡片列表（三个标签复用同一套卡片组件） -->
           <div v-if="list.length" class="card-list">
-            <div
-              v-for="(m, idx) in list"
-              :key="m.id"
-              class="moment-card"
-              @click="router.push(`/detail/${m.id}`)"
-            >
-              <div class="moment-author">
-                <span class="avatar-ring">
-                  <img class="avatar" :src="imgUrl(m.avatar)" alt="avatar" />
-                </span>
-                <div class="author-info">
-                  <span class="nickname">{{ m.nickname }}</span>
-                  <span class="author-time">{{ formatTime(m.createTime) }}</span>
-                </div>
-              </div>
-              <h2 class="moment-title" v-if="m.title">{{ m.title }}</h2>
-              <p class="moment-content">{{ m.content }}</p>
-              <div class="moment-images" :class="'imgs-' + Math.min(m.images?.length || 0, 9)" v-if="m.images?.length">
-                <img
-                  v-for="(img, i) in m.images"
-                  :key="i"
-                  class="grid-img"
-                  :src="imgUrl(img)"
-                  :alt="m.title"
-                  @click.stop="preview(img)"
-                />
-              </div>
-              <div class="moment-meta">
-                <!-- 我的发布：可直接管理自己这条动态 -->
-                <span
-                  v-if="activeTab === 'moments' && !isOther"
-                  class="meta-chip"
-                  @click.stop="editMoment(m)"
-                >编辑</span>
-                <span
-                  v-if="activeTab === 'moments' && !isOther"
-                  class="meta-chip"
-                  @click.stop="removeMoment(m)"
-                >删除</span>
-                <span v-if="m.location" class="meta-chip">📍 {{ m.location }}</span>
-                <span v-if="m.mood" class="meta-chip">心情 · {{ m.mood }}</span>
-                <span class="meta-stats">
-                  <LikeButton :targetId="m.id" :targetType="1" :initial="m.likeCount ?? 0" />
-                  <span>✎ {{ m.commentCount ?? 0 }}</span>
-                  <CollectButton :momentId="m.id" :initial="m.collectCount ?? 0" />
-                </span>
-              </div>
-            </div>
+            <MomentCard v-for="m in list" :key="m.id" :moment="m" variant="ink">
+              <!-- 我的发布：卡片里多两个管理入口，其余与话题页完全一致 -->
+              <template v-if="activeTab === 'moments' && !isOther" #meta-extra>
+                <span class="meta-chip meta-chip--act" @click.stop="editMoment(m)">编辑</span>
+                <span class="meta-chip meta-chip--act" @click.stop="removeMoment(m)">删除</span>
+              </template>
+            </MomentCard>
 
             <div class="load-more" v-if="hasMore && !loading">
               <el-button @click="loadMore">载入更多</el-button>
@@ -187,10 +146,9 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
-import LikeButton from '../components/LikeButton.vue'
-import CollectButton from '../components/CollectButton.vue'
+import MomentCard from '../components/MomentCard.vue'
+import { imgUrl } from '../utils/url'
 import {
   getMyProfile, updateMyProfile, changeMyPassword,
   getMyMoments, getMyLikes, getMyCollects,
@@ -302,7 +260,12 @@ async function fetchProfile() {
   }
 }
 
+/* 连点标签页 / 载入更多时会有多个请求在路上，回来的顺序不保证；
+   seq 对号，过期响应直接丢，避免「切到收藏却显示点赞」。 */
+let listSeq = 0
+
 async function fetchList(reset = true) {
+  const seq = ++listSeq
   if (reset) {
     page.value = 1
     list.value = []
@@ -316,11 +279,12 @@ async function fetchList(reset = true) {
       const fetcher = { moments: getMyMoments, likes: getMyLikes, collects: getMyCollects }[activeTab.value]
       data = await fetcher(page.value, size) || {}
     }
+    if (seq !== listSeq) return
     list.value = reset ? (data.records ?? []) : [...list.value, ...(data.records ?? [])]
     hasMore.value = data.current < data.pages
   } catch (err) {
   } finally {
-    loading.value = false
+    if (seq === listSeq) loading.value = false
   }
 }
 
@@ -425,23 +389,6 @@ async function submitPassword() {
   } finally {
     saving.value = false
   }
-}
-
-/* ---------------- 工具函数 ---------------- */
-function imgUrl(img) {
-  if (!img) return ''
-  if (img.startsWith('http') || img.startsWith('//')) return img
-  return img.startsWith('/') ? img : '/' + img
-}
-function preview(img) {
-  window.open(imgUrl(img), '_blank')
-}
-function formatTime(t) {
-  if (!t) return ''
-  const d = new Date(t)
-  if (isNaN(d.getTime())) return String(t)
-  const p = (n) => (n < 10 ? '0' + n : n)
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 onMounted(() => {
@@ -657,79 +604,21 @@ watch(targetUserId, () => {
   padding-top: 20px;
 }
 
-/* ============ 动态卡片 ============ */
+/* ============ 动态卡片 ============
+   卡片本体在 <MomentCard variant="ink">，这里只留列表容器；
+   下面 .meta-chip 是塞进卡片 #meta-extra 插槽的「编辑 / 删除」，
+   插槽内容归属本组件作用域，所以要在这里单独着色。 */
 .card-list { display: flex; flex-direction: column; gap: 16px; }
-.moment-card {
-  position: relative;
-  padding: 20px 22px;
-  border: 1px solid var(--card-border);
-  border-radius: 2px;
-  background: var(--fill);
-  cursor: pointer;
-  transition: border-color .25s, box-shadow .25s;
-}
-.moment-card:hover {
-  border-color: var(--card-border-hover);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, .3);
-}
-.moment-author { display: flex; align-items: center; gap: 12px; }
-.moment-author .avatar-ring { width: 38px; height: 38px; }
-.author-info { display: flex; flex-direction: column; }
-.nickname { font-size: 13px; color: var(--txt-1); letter-spacing: 1px; }
-.author-time { font-size: 11px; color: var(--txt-3); margin-top: 2px; }
-.moment-title {
-  font-family: var(--font-brush);
-  font-size: 22px;
-  font-weight: 400;
-  letter-spacing: 2px;
-  color: #f0f0f0;
-  margin: 14px 0 6px;
-}
-.moment-content {
-  font-size: 13px;
-  line-height: 1.8;
-  color: var(--txt-2);
-  margin: 8px 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.moment-images {
-  display: grid;
-  gap: 6px;
-  margin: 12px 0;
-}
-.moment-images.imgs-1 { grid-template-columns: 1fr; max-width: 360px; }
-.moment-images.imgs-2, .moment-images.imgs-3 { grid-template-columns: repeat(3, 1fr); }
-.moment-images.imgs-4 { grid-template-columns: repeat(2, 1fr); }
-.moment-images { grid-template-columns: repeat(3, 1fr); }
-.grid-img {
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  border-radius: 2px;
-  border: 1px solid var(--card-border);
-}
-.moment-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
+.tab-body .meta-chip {
+  padding: 3px 10px;
   font-size: 12px;
   color: var(--txt-3);
-}
-.meta-chip {
-  padding: 3px 10px;
   border: 1px solid var(--card-border);
   border-radius: 2px;
   background: rgba(255, 255, 255, .02);
 }
-.meta-stats {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
+.tab-body .meta-chip--act { cursor: pointer; transition: color .2s, border-color .2s; }
+.tab-body .meta-chip--act:hover { color: var(--c-gold); border-color: var(--c-gold-dim); }
 
 /* 载入更多 / 空状态 */
 .load-more { display: flex; justify-content: center; padding: 18px 0; }
@@ -772,5 +661,39 @@ watch(targetUserId, () => {
   font-size: 22px;
   color: var(--c-gold);
   letter-spacing: 2px;
+}
+
+/* ---------- 窄屏 ----------
+   名片原来是「头像 + 身份 + 三个竖排按钮」三列 nowrap：390px 下身份区
+   只剩百来像素，昵称和简介被压成一字一行（简介 ∥ 着排成一条竖线）。
+   窄屏改成两行——头像+身份一行，按钮整行横排均分。 */
+@media (max-width: 760px) {
+  .profile-wrap { padding: 20px 12px 64px; }
+  .profile-hero { padding: 22px 18px 0; }
+  .hero-top { flex-wrap: wrap; gap: 14px; }
+  .hero-avatar { width: 64px; height: 64px; }
+  .avatar-fallback { font-size: 30px; }
+  .hero-nickname { font-size: 24px; letter-spacing: 2px; }
+  .hero-bio { font-size: 12.5px; margin-bottom: 6px; }
+  .hero-deco { display: none; }
+  .hero-actions {
+    flex: 1 0 100%;
+    flex-direction: row;
+    gap: 8px;
+  }
+  .hero-actions .el-button {
+    flex: 1;
+    margin: 0;
+    padding: 0 4px;
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+  .hero-stats { gap: 0; margin-top: 18px; padding: 14px 0; }
+  .stat-item { flex: 1; }
+  .stat-label { letter-spacing: 2px; }
+
+  .profile-content { padding: 0 16px 22px; }
+  .tab-bar { gap: 26px; }
+  .tab-item { font-size: 13px; letter-spacing: 2px; }
 }
 </style>

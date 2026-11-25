@@ -1,10 +1,10 @@
 // src/main.js —— Vue 应用入口：创建实例、全局注册 Element Plus 与路由、配置 axios 拦截器
 
 import { createApp } from 'vue'
-import ElementPlus from 'element-plus'                    // element-plus 组件库
-import 'element-plus/dist/index.css'                        // 组件库默认样式
+// Element Plus 改为按需引入（见 vite.config.js 的 AutoImport / Components）。
+// 全站只用 9 个组件 + ElMessage/ElMessageBox + v-loading，
+// 之前整包引入让首屏多背了 947kB JS + 458kB CSS。
 import 'element-plus/theme-chalk/dark/css-vars.css'        // 暗色主题变量（配合 html class="dark"）
-import { ElMessage } from 'element-plus'                    // 全局消息提示
 import axios from 'axios'                                    // 请求库
 import router from './router'                                // 路由配置
 import App from './App.vue'
@@ -18,9 +18,14 @@ document.documentElement.classList.add('dark')
 // 这样后端换端口不用改前端代码，也不会再有跨域问题。
 axios.defaults.baseURL = '/api'
 
-// ① 全局注册 Element Plus + 路由
+// 超时：不设的话，弱网 / 后端卡死时请求会一直挂着（浏览器默认可能几分钟），
+// 页面就永远转圈、用户只能刷新。15s 足够覆盖最慢的列表接口；
+// 上传类请求（发布动态）在各自调用处单独放宽到 60s，否则 3MB 图片在 4G 上会被掐断。
+axios.defaults.timeout = 15000
+
+// ① 只装路由：Element Plus 组件由 unplugin-vue-components 按需注册，
+//    不再 app.use(ElementPlus) 整包注册
 const app = createApp(App)
-app.use(ElementPlus)
 app.use(router)
 
 // ② 请求拦截器：登录成功后 token 存在 localStorage，
@@ -82,7 +87,10 @@ axios.interceptors.response.use(
       })
       const code = err.code || 'ERR_UNKNOWN'
       let tip = `请求未到达后端（${code}）`
-      if (/Mixed Content/i.test(err.message || '')) {
+      if (code === 'ECONNABORTED' || /timeout/i.test(err.message || '')) {
+        // axios 超时：后端可能只是慢，别让用户以为是网络断了
+        tip = '请求超时：网络较慢或服务暂时无响应，请稍后重试'
+      } else if (/Mixed Content/i.test(err.message || '')) {
         tip = '当前是 HTTPS 页面，浏览器拦截了接口请求（Mixed Content）。请用 http://localhost:5173 打开页面。'
       } else if (code === 'ERR_NETWORK' && /CORS|cross-origin/i.test(err.message || '')) {
         tip = '请求被浏览器拦截：请确认页面从 http://localhost:5173 打开（不要直接用 IP 或 127.0.0.1 混用）。'

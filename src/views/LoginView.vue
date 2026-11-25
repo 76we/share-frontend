@@ -26,36 +26,59 @@
       <div class="stage-card">
         <!-- 卡片内小标题 -->
         <h2 class="card-title">尘叙阁</h2>
-        <p class="card-welcome">
-          {{ view === 'login' ? '欢迎归来，尘间过客' : '且在此处，叙你的故事' }}
-        </p>
+        <p class="card-welcome">{{ welcomeText }}</p>
 
-        <!-- 表单区：登录 / 注册 共用同一组输入框 -->
+        <!-- 表单区：登录=账号+密码；注册=账号+邮箱+密码+验证码；找回密码=邮箱+新密码+验证码 -->
         <div class="form-area">
           <el-input
+            v-if="view !== 'reset'"
             v-model="form.username"
             placeholder="账号"
             clearable
           />
           <el-input
+            v-if="view !== 'login'"
+            v-model="form.email"
+            placeholder="QQ 邮箱"
+            clearable
+          />
+          <el-input
             v-model="form.password"
             type="password"
-            placeholder="密码"
+            :placeholder="view === 'reset' ? '新密码' : '密码'"
             show-password
           />
-          <!-- 提交按钮：登录 → /users/login，注册 → /users/register -->
+          <div v-if="view !== 'login'" class="code-row">
+            <el-input
+              v-model="form.emailCode"
+              placeholder="邮箱验证码"
+              maxlength="6"
+            />
+            <el-button
+              class="code-btn"
+              :loading="codeLoading"
+              :disabled="countdown > 0"
+              @click="sendCode"
+            >
+              {{ countdown > 0 ? countdown + 's' : '获取验证码' }}
+            </el-button>
+          </div>
+          <p v-if="view === 'login'" class="forgot-link" @click="toReset">
+            忘记密码？
+          </p>
+          <!-- 提交按钮：登录 → /users/login，注册 → /users/register，找回密码 → /users/reset-password -->
           <el-button
             class="submit-btn"
             :loading="loading"
             @click="handleSubmit"
           >
-            {{ view === 'login' ? '登 录' : '注 册' }}
+            {{ submitText }}
           </el-button>
         </div>
 
-        <!-- 登录 / 注册 切换 -->
+        <!-- 登录 / 注册 切换；找回密码时单独返回登录 -->
         <p class="switch-link" @click="toggleView">
-          {{ view === 'login' ? '没有账号？前往注册' : '已有账号？返回登录' }}
+          {{ switchText }}
         </p>
       </div>
     </section>
@@ -63,9 +86,8 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { useVerseTyper } from '../utils/useVerseTyper'
 import InkBackdrop from '../components/InkBackdrop.vue'
@@ -85,34 +107,146 @@ function scrollToCard() {
 }
 
 /* ---------------- 页面状态 ---------------- */
-// 'login' 登录 | 'register' 注册
+// 'login' 登录 | 'register' 注册 | 'reset' 找回密码
 const view = ref('login')
+
+const welcomeText = computed(() => ({
+  login: '欢迎归来，尘间过客',
+  register: '且在此处，叙你的故事',
+  reset: '忘川有渡，重叙此门',
+}[view.value]))
+
+const submitText = computed(() => ({
+  login: '登 录',
+  register: '注 册',
+  reset: '重置密码',
+}[view.value]))
+
+const switchText = computed(() => ({
+  login: '没有账号？前往注册',
+  register: '已有账号？返回登录',
+  reset: '想起密码了？返回登录',
+}[view.value]))
 
 // 表单数据
 const form = reactive({
   username: '',
   password: '',
+  email: '',
+  emailCode: '',
 })
 
 // 请求中标志，防止连点
 const loading = ref(false)
 
+/* ---------------- 邮箱验证码 ---------------- */
+const codeLoading = ref(false)
+const countdown = ref(0)
+let countdownTimer = null
+
+async function sendCode() {
+  const email = form.email.trim()
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    ElMessage.warning('请先填写正确的邮箱')
+    return
+  }
+  codeLoading.value = true
+  try {
+    // 找回密码走单独的验证码接口（scene=reset），注册走 register
+    const url = view.value === 'reset' ? '/users/password-code' : '/users/email-code'
+    const res = await axios.post(url, { email })
+    // data=true 表示邮件已真发；false 表示后端没配发件邮箱，验证码只打到后端日志
+    if (res.data.data) {
+      ElMessage.success('验证码已发送，请查收邮箱（5 分钟内有效）')
+    } else {
+      ElMessage.warning('未配置发件邮箱，验证码已输出到后端日志，请查看控制台')
+    }
+    // 60 秒重发冷却
+    countdown.value = 60
+    clearInterval(countdownTimer)
+    countdownTimer = setInterval(() => {
+      countdown.value -= 1
+      if (countdown.value <= 0) clearInterval(countdownTimer)
+    }, 1000)
+  } catch (err) {
+    // 响应拦截器已统一提示
+  } finally {
+    codeLoading.value = false
+  }
+}
+
+// 离开页面时清掉倒计时定时器，避免重复触发
+onUnmounted(() => clearInterval(countdownTimer))
+
 /* ---------------- 标语诗句轮播（打字机） ---------------- */
 // 逐字写出 → 停留 → 抹去 → 换下一句，循环展示洒脱诗句
 const { typed: typedSlogan } = useVerseTyper()
 
-/* ---------------- 切换登录 / 注册 ---------------- */
-function toggleView() {
-  view.value = view.value === 'login' ? 'register' : 'login'
+/* ---------------- 切换登录 / 注册 / 找回密码 ---------------- */
+function resetForm() {
   form.username = ''
   form.password = ''
+  form.email = ''
+  form.emailCode = ''
+}
+
+function toggleView() {
+  view.value = view.value === 'login' ? 'register' : 'login'
+  resetForm()
+}
+
+// 登录页「忘记密码？」→ 找回密码
+function toReset() {
+  view.value = 'reset'
+  resetForm()
 }
 
 /* ---------------- 提交表单 ---------------- */
 async function handleSubmit() {
+  if (view.value === 'reset') {
+    if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) {
+      ElMessage.warning('请输入注册时用的邮箱')
+      return
+    }
+    if (!/^\d{6}$/.test(form.emailCode.trim())) {
+      ElMessage.warning('请输入 6 位邮箱验证码')
+      return
+    }
+    if (form.password.length < 6) {
+      ElMessage.warning('新密码至少 6 位')
+      return
+    }
+    loading.value = true
+    try {
+      await axios.post('/users/reset-password', {
+        email: form.email.trim(),
+        code: form.emailCode.trim(),
+        newPassword: form.password,
+      })
+      ElMessage.success('密码已重置，请用新密码登录')
+      view.value = 'login'
+      resetForm()
+    } catch (err) {
+      // 响应拦截器已统一提示
+    } finally {
+      loading.value = false
+    }
+    return
+  }
+
   if (!form.username.trim() || !form.password) {
     ElMessage.warning('请输入账号和密码')
     return
+  }
+  if (view.value === 'register') {
+    if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) {
+      ElMessage.warning('请输入正确的邮箱')
+      return
+    }
+    if (!/^\d{6}$/.test(form.emailCode.trim())) {
+      ElMessage.warning('请输入 6 位邮箱验证码')
+      return
+    }
   }
 
   loading.value = true
@@ -135,9 +269,15 @@ async function handleSubmit() {
       await axios.post('/users/register', {
         username: form.username,
         password: form.password,
+        email: form.email.trim(),
+        emailCode: form.emailCode.trim(),
       })
       ElMessage.success('注册成功，请登录')
       view.value = 'login'
+      form.password = ''
+      form.email = ''
+      form.emailCode = ''
+      form.username = form.username.trim()
     }
   } catch (err) {
     // 错误提示已由 main.js 的响应拦截器统一弹出（BusinessException 的 message），
@@ -157,7 +297,11 @@ async function handleSubmit() {
 
 /* ---------- 首屏 Hero：满屏品牌展示 ---------- */
 .hero {
+  /* iOS Safari 的 100vh 取的是「地址栏收起后」的高度，比实际可视区高，
+     首屏底部的「向下探索」会被压到屏幕外，页面看起来像一张点不动的海报。
+     svh 取小视口高度，两端都留 100vh 兜底。 */
   height: 100vh;
+  height: 100svh;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -289,6 +433,55 @@ async function handleSubmit() {
   font-size: 12px;
   letter-spacing: 4px;
   color: rgba(255, 255, 255, 0.42);
+}
+
+/* ---------- 登录：忘记密码 ---------- */
+.forgot-link {
+  margin: -4px 0 0;
+  text-align: right;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: rgba(143, 211, 199, 0.62);
+  cursor: pointer;
+  transition: color 0.3s;
+}
+.forgot-link:hover {
+  color: #8fd3c7;
+}
+
+/* ---------- 注册：邮箱验证码行 ---------- */
+.code-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.code-row .el-input {
+  flex: 1;
+  min-width: 0;
+}
+.code-btn {
+  flex-shrink: 0;
+  height: 40px;
+  padding: 0 16px;
+  font-size: 13px;
+  letter-spacing: 2px;
+  background: transparent;
+  border: 1px solid rgba(143, 211, 199, 0.4);
+  color: #8fd3c7;
+  transition: border-color 0.3s, color 0.3s, background 0.3s;
+}
+.code-btn:hover,
+.code-btn:focus {
+  background: rgba(143, 211, 199, 0.08);
+  border-color: rgba(143, 211, 199, 0.85);
+  color: #cdf1ea;
+}
+.code-btn.is-disabled,
+.code-btn.is-disabled:hover {
+  background: transparent;
+  border-color: rgba(143, 211, 199, 0.18);
+  color: rgba(143, 211, 199, 0.45);
+  cursor: not-allowed;
 }
 
 /* ---------- 尊重系统的减少动态效果偏好 ---------- */

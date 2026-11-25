@@ -12,10 +12,10 @@
     <div class="detail-card nr-card-deep" v-if="moment">
       <!-- 作者行 -->
       <div class="moment-author">
-        <img class="avatar" :src="imgUrl(moment.avatar)" alt="avatar" />
+        <UserAvatar class="avatar" :src="imgUrl(moment.avatar)" :name="moment.nickname" />
         <div class="author-info">
           <span class="nickname">{{ moment.nickname }}</span>
-          <span class="author-time">{{ formatTime(moment.createTime) }}</span>
+          <span class="author-time">{{ formatDateTime(moment.createTime) }}</span>
         </div>
       </div>
 
@@ -31,7 +31,7 @@
           class="big-img"
           :src="imgUrl(img)"
           :alt="moment.title"
-          @click="preview(i)"
+          @click="openImage(moment.images?.[i])"
         />
       </div>
 
@@ -45,7 +45,9 @@
       <div class="detail-stats">
         <span class="stat-like"><LikeButton :targetId="moment.id" :targetType="1" :initial="moment.likeCount ?? 0" /> 赞</span>
         <span>✎ {{ moment.commentCount ?? 0 }} 评</span>
+        <span class="stat-view">◉ {{ moment.viewCount ?? 0 }} 读</span>
         <span class="stat-collect"><CollectButton :momentId="moment.id" :initial="moment.collectCount ?? 0" /> 藏</span>
+        <span class="stat-op" @click="shareMoment">分享</span>
         <!-- 仅作者可见：编辑 / 删除 -->
         <span v-if="isMine" class="stat-op" @click="goEdit">编辑</span>
         <span v-if="isMine" class="stat-op stat-op-danger" @click="handleDelete">删除</span>
@@ -117,11 +119,13 @@
 <script setup>
 import { ref, computed, onMounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import CommentNode from '../components/CommentNode.vue'
 import LikeButton from '../components/LikeButton.vue'
 import CollectButton from '../components/CollectButton.vue'
+import UserAvatar from '../components/UserAvatar.vue'
+import { imgUrl, openImage } from '../utils/url'
+import { formatDateTime } from '../utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -193,6 +197,33 @@ function resolveMyUserId() {
 function canDelete(comment) {
   if (!token.value || myUserId.value == null) return false
   return Number(comment.commentUserId) === Number(myUserId.value)
+}
+
+/* ---------------- 分享：复制带 OG 标签的落地页链接 ---------------- */
+/* 直接分享 /detail/:id 的话，微信抓不到内容（SPA 不执行 JS），预览是白卡片。
+   /api/share/moment/:id 由后端按 UA 返回 og:title/og:image，真人点开再 302 回详情页。 */
+async function shareMoment() {
+  const id = moment.value?.id
+  if (!id) return
+  const url = `${location.origin}/api/share/moment/${id}`
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(url)
+    } else {
+      // http 环境（本地/内网）没有 clipboard API，退回到临时输入框方案
+      const ta = document.createElement('textarea')
+      ta.value = url
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      ta.remove()
+    }
+    ElMessage.success('链接已复制，发到微信就是一张带封面的卡片')
+  } catch {
+    ElMessage.info(url)
+  }
 }
 
 /* ---------------- 动态管理：编辑 / 删除（仅作者） ---------------- */
@@ -292,25 +323,7 @@ async function onDelete(commentId) {
   }
 }
 
-/* ---------------- 图片地址处理 ---------------- */
-function imgUrl(img) {
-  if (!img) return ''
-  if (img.startsWith('http') || img.startsWith('//')) return img
-  return img.startsWith('/') ? img : '/' + img
-}
-
-function preview(i) {
-  window.open(imgUrl(moment.value?.images?.[i]), '_blank')
-}
-
-/* ---------------- 时间格式化 ---------------- */
-function formatTime(t) {
-  if (!t) return ''
-  const d = new Date(t)
-  if (isNaN(d.getTime())) return String(t)
-  const p = (n) => (n < 10 ? '0' + n : n)
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
-}
+/* ---------------- 图片地址 / 时间 ---------------- */
 
 onMounted(() => {
   resolveMyUserId()
@@ -586,5 +599,25 @@ onMounted(() => {
   font-size: 14px;
   letter-spacing: 3px;
   color: var(--txt-3);
+}
+
+/* ---------- 窄屏 ----------
+   操作栏原来是 nowrap + gap 20：390px 下「分享 / 编辑 / 删除」被挤出
+   视口右侧（整页 scrollWidth 409 > 390），删除按钮直接点不到。
+   这里让它换行，并把作者操作从「靠右推」改成顺排，两行也读得顺。 */
+@media (max-width: 600px) {
+  .detail { padding: 16px 12px 64px; }
+  .detail-card { padding: 20px 18px; }
+  .comment-section { padding: 18px 16px 24px; }
+  .detail-stats {
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    font-size: 12.5px;
+  }
+  .detail-stats .stat-op {
+    margin-left: 0;
+    padding: 4px 10px;
+  }
+  .back-link { margin-bottom: 12px; }
 }
 </style>

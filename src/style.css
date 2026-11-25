@@ -14,18 +14,22 @@
   /* 冷白主色体系（略带冷青调） */
   --nr-white: #f2f4f7;
   --nr-white-soft: #d5dae1;
-  /* 文字层级：主 / 次 / 更淡 */
-  --txt-1: rgba(244, 247, 251, 0.94);
-  --txt-2: rgba(224, 231, 240, 0.58);
-  --txt-3: rgba(216, 225, 238, 0.38);
-  /* 深灰水墨卡片（半透明近似毛玻璃，不做逐帧 blur 采样；冷灰比纯黑更有层次） */
-  --card-bg: rgba(24, 28, 35, 0.74);
-  --card-bg-solid: rgba(23, 27, 33, 0.72);
-  --card-bg-deep-solid: rgba(18, 21, 26, 0.88);
-  --card-border: rgba(222, 217, 203, 0.16);
-  --card-border-hover: rgba(222, 217, 203, 0.34);
+  /* 文字层级：主 / 次 / 更淡
+     长期观看的页面，次要文字必须够清楚，否则整片灰蒙蒙、看久了很累 */
+  --txt-1: rgba(240, 237, 231, 0.96);
+  --txt-2: rgba(226, 222, 214, 0.72);
+  /* 0.52 时实测对比度只有 3.4–3.8（12px 小字），低于 WCAG AA 的 4.5；
+     提到 0.60 后约 4.7，仍属次要层级，但长时间看不费眼 */
+  --txt-3: rgba(204, 199, 190, 0.6);
+  /* 卡片底色：提高不透明度，让卡片真正浮在背景之上，不再和背景糊成一片 */
+  --card-bg: rgba(32, 31, 29, 0.94);
+  --card-bg-solid: rgba(30, 29, 27, 0.95);
+  --card-bg-deep-solid: rgba(22, 21, 20, 0.97);
+  /* 边框退到极淡：层次交给明度和阴影，不再靠一圈线撑住卡片 */
+  --card-border: rgba(232, 226, 216, 0.08);
+  --card-border-hover: rgba(232, 226, 216, 0.2);
   /* 统一圆角：大圆角卡片 + 柔和控件 */
-  --radius-card: 16px;
+  --radius-card: 12px;
   --radius-ctrl: 9px;
   --radius-sm: 6px;
   /* 输入框 / 填充 */
@@ -37,8 +41,22 @@
   --c-gold-dim: rgba(222, 217, 203, 0.55); /* 清金弱化 */
   --c-gold-faint: rgba(222, 217, 203, 0.14); /* 清金极淡（描边/底纹） */
   /* 字体 */
-  --font-body: 'ZCOOL XiaoWei', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  /* 补字面必须排在前面：正文的 ZCOOL XiaoWei 是 Google Fonts 的分片版，
+     它给「回」(U+56DE) 声明的 unicode-range 里并不含这个字形，
+     而 unicode-range 一旦声明覆盖，浏览器就不会再往后回退 ——
+     结果全站每个「回」都渲染成实心方块（返回 / 回响 / 年度回忆…）。
+     这里用一个只覆盖 U+56DE 的本地字面兜住它：其余字照旧走小薇，
+     只有「回」落到系统字体，字形不同但至少是真的字。 */
+  --font-body: 'ZW-Gap', 'ZCOOL XiaoWei', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-brush: 'Ma Shan Zheng', cursive;
+}
+
+@font-face {
+  font-family: 'ZW-Gap';
+  src: local('PingFang SC'), local('Hiragino Sans GB'), local('Microsoft YaHei'),
+    local('Noto Sans CJK SC'), local('Noto Sans SC'), local('Source Han Sans SC'),
+    local('Heiti SC');
+  unicode-range: U+56DE;
 }
 
 * {
@@ -60,8 +78,8 @@ body {
   color: var(--txt-1);
   background-color: #0a0c10;
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(150, 175, 205, 0.07), transparent 70%),
-    radial-gradient(ellipse 60% 40% at 85% 110%, rgba(120, 150, 185, 0.045), transparent 70%);
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(202, 152, 104, 0.075), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 85% 110%, rgba(168, 116, 72, 0.05), transparent 70%);
   background-attachment: fixed;
   min-height: 100vh;
   letter-spacing: 0.02em;
@@ -87,18 +105,37 @@ html.dark {
   --el-color-danger: var(--c-danger);
 }
 
+/* 主按钮：--el-color-primary 被改成近白（#f5f5f5），Element Plus 却仍按
+   「深色系主色配白字」处理，结果按钮是一块没有字的白色方块
+   （删除确认框里最明显）。这里统一改成白底深字，与发布页 .submit-btn 一致。 */
+.el-button.el-button--primary {
+  --el-button-text-color: #0d0c0a;
+  --el-button-hover-text-color: #0d0c0a;
+  --el-button-active-text-color: #0d0c0a;
+  color: #0d0c0a;
+}
+
 /* ---------- 通用卡片 ----------
    性能说明：原使用 backdrop-filter 毛玻璃，滚动时每张卡片每帧都要
    采样并模糊背后内容（首页 12+ 张卡片 = 巨大 GPU/CPU 开销）。
    背景图已预先烘焙压暗，改用实色背景视觉几乎无差别，零逐帧模糊。 */
 .nr-card {
   background: var(--card-bg-solid);
+  /* 左上角渗入一道极淡的光，保留「纸页受光」的层次，但不再压过底色 */
+  background-image: linear-gradient(155deg, rgba(255, 245, 232, 0.035), transparent 46%);
   border: 1px solid var(--card-border);
-  border-radius: var(--radius-card);
-  transition: border-color 0.25s ease;
+  border-radius: 12px;
+  /* 柔和投影做层次：比描边更现代，看久了也不会觉得「全是线」 */
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 10px 28px -16px rgba(0, 0, 0, 0.7);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 .nr-card:hover {
   border-color: var(--card-border-hover);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 14px 34px -16px rgba(0, 0, 0, 0.8);
 }
 .nr-card-deep {
   background: var(--card-bg-deep-solid);
@@ -255,14 +292,14 @@ html.dark {
 /* ---------- ① 渐变文字流动（用于毛笔大字 Logo） ---------- */
 /* 用渐变填充文字，再让 background-position 循环移动，形成光在字里流过 */
 .flow-text {
-  /* 标题字色：暖金箔（古铜 → 浅金 → 亮金箔 → 高光 → 古铜），随 textFlow 横向流动 */
+  /* 标题字色：青玉（墨青 → 淡青 → 玉青 → 冷白高光 → 墨青），随 textFlow 横向流动 */
   background: linear-gradient(
     100deg,
-    #a37f42 0%,
-    #f3e3ba 24%,
-    #c9a25a 46%,
-    #fff3d2 68%,
-    #8f7038 90%
+    #2f6f70 0%,
+    #bfeaea 24%,
+    #4f9a9c 46%,
+    #e6fbfa 68%,
+    #2b5d5e 90%
   );
   background-size: 250% 100%;
   -webkit-background-clip: text;
@@ -391,7 +428,7 @@ html.dark {
 .nr-glow:hover {
   transform: translateY(-4px);
   border-color: var(--card-border-hover);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(222, 217, 203, 0.06);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(228, 172, 118, 0.1), inset 0 1px 0 rgba(255, 224, 186, 0.11);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -402,3 +439,20 @@ html.dark {
   }
 }
 
+
+/* ---------- 触屏：输入框字号必须 ≥16px ----------
+   iOS Safari 在聚焦 font-size < 16px 的输入框时会强制放大整个页面，
+   失焦后又缩不回来，页面会停在放大的半截位置（搜索框 12.5px、
+   Element 输入框 14px 都会触发）。窄屏统一抬到 16px。
+   Element Plus 的 .el-input__inner 自带 14px 且选择器权重更高，
+   这里必须 !important 才能压住。 */
+@media (max-width: 900px), (pointer: coarse) {
+  input,
+  textarea,
+  select,
+  .el-input__inner,
+  .el-textarea__inner,
+  .el-select__input {
+    font-size: 16px !important;
+  }
+}

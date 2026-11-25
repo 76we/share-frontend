@@ -1,13 +1,21 @@
 // src/router/index.js —— 路由配置
 // /login 登录注册、/home 首页信息流、/publish 发布图文、/detail/:id 动态详情
 import { createRouter, createWebHistory } from 'vue-router'
-import LoginView from '../views/LoginView.vue'
-import Home from '../views/Home.vue'
-import Publish from '../views/Publish.vue'
-import Detail from '../views/Detail.vue'
-import Profile from '../views/Profile.vue'
-import PhotoWall from '../views/PhotoWall.vue'
-import Topic from '../views/Topic.vue'
+
+/* 路由组件一律走动态 import（懒加载）。
+   静态 import 会把 7 个视图打成一个 chunk：打开登录页也要下载并解析
+   PhotoWall(1523 行) / AlbumManager(823 行) 这些根本用不到、也看不到的代码，
+   实测 index chunk 363kB(raw) / 122kB(gzip)，CSS 189kB 同样捆在一起。
+   改成 () => import() 后 Rollup 按路由切 chunk，首屏只付当前页的成本，
+   样式也会跟着各自的 chunk 拆开。
+   注意：这里不要加 webpackChunkName 之类的注释，Vite 用文件路径自动命名。 */
+const LoginView = () => import('../views/LoginView.vue')
+const Home = () => import('../views/Home.vue')
+const Publish = () => import('../views/Publish.vue')
+const Detail = () => import('../views/Detail.vue')
+const Profile = () => import('../views/Profile.vue')
+const PhotoWall = () => import('../views/PhotoWall.vue')
+const Topic = () => import('../views/Topic.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -48,6 +56,19 @@ router.beforeEach((to) => {
     return { path: '/home' }
   }
   return true
+})
+
+// 懒加载的必备兜底：上线新版本后，旧的 chunk 文件会被删掉。
+// 用户停留在旧页面（HTML 还是旧的）时点导航，动态 import 会 404，
+// 报 "Failed to fetch dynamically imported module"，路由导航直接失败、页面卡住不动。
+// 整页刷新一次就能拿到新入口。加 10s 防抖标记，避免 CDN 还在发旧 HTML 时无限刷新。
+router.onError((err, to) => {
+  const msg = String(err?.message || err)
+  if (!/dynamically imported module|Loading chunk|Importing a module script/i.test(msg)) return
+  if (sessionStorage.getItem('chunk-reload') === '1') return
+  sessionStorage.setItem('chunk-reload', '1')
+  setTimeout(() => sessionStorage.removeItem('chunk-reload'), 10000)
+  window.location.assign(to?.fullPath || '/')
 })
 
 export default router

@@ -10,11 +10,11 @@
     </div>
 
     <!-- 顶部固定导航栏（登录页隐藏，保持全屏居中卡片；首页首屏透明沉浸） -->
-    <header v-if="!isLogin" class="navbar" :class="{ 'nav-transparent': immersiveTop }">
+    <header v-if="!isLogin" class="navbar">
       <div class="nav-inner">
-        <!-- 左：印章 + 毛笔字 Logo -->
+        <!-- 左：阁楼标志 + 毛笔字 Logo -->
         <router-link to="/home" class="nav-logo">
-          <span class="seal logo-seal">尘</span>
+          <PavilionMark class="logo-mark" />
           <span class="logo-text">
             <span class="logo-brush">尘叙阁</span>
             <span class="logo-sub">CHEN XU PAVILION</span>
@@ -149,8 +149,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import PavilionMark from './components/PavilionMark.vue'
 import {
   getNotifications, getUnreadCount, markNotificationRead, markAllRead,
 } from './utils/notificationApi'
@@ -268,27 +269,18 @@ async function readAll() {
   } catch (e) { /* 拦截器已提示 */ }
 }
 
-/* ---------------- 滚动状态：首页首屏顶部时导航栏透明沉浸 ----------------
-   全局背景已改为静态图（无视频解码），滚动本身不再卡顿；
-   这里只需根据滚动距离切换导航栏样式：首页首屏顶部透明，下滑后毛玻璃。 */
-const scrolledTop = ref(true)
-function onScroll() {
-  scrolledTop.value = window.scrollY < 40
-}
+/* ---------------- 滚动状态 ----------------
+   首页已改为内容优先布局（顶部无 Hero），导航恒为毛玻璃胶囊，
+   不再需要「滚动到顶部时切透明」的监听，滚动事件一并移除。 */
 onMounted(() => {
-  onScroll()
   loadUnread()
-  window.addEventListener('scroll', onScroll, { passive: true })
 })
-onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
 
 // 登录页保持纯净（全屏居中卡片），不显示导航栏
 const token = ref(localStorage.getItem('token') || '')
 const username = ref(localStorage.getItem('username') || '')
 const isLogin = computed(() => route.path === '/login')
 const isHome = computed(() => route.path === '/home')
-// 首页首屏顶部：导航栏透明沉浸，让位给视频入场动画
-const immersiveTop = computed(() => isHome.value && scrolledTop.value)
 
 // 头像首字：用户名首字符（中文/英文均可），缺省为"尘"
 const avatarChar = computed(() => {
@@ -342,9 +334,9 @@ watch(
 .static-bg-img {
   position: absolute;
   inset: 0;
-  background-image: url('/chenxu-static.jpg');
+  background-image: url('/cx-heal-lake.jpg');
   background-size: cover;
-  background-position: center 40%;
+  background-position: center 46%;
   /* 灰度/模糊/压暗已烘焙进图片文件，运行时不施加任何 filter，
      避免全屏滤镜每帧合成（滚动卡顿主因之一） */
 }
@@ -352,9 +344,10 @@ watch(
 .static-bg-mask {
   position: absolute;
   inset: 0;
+  /* 新背景图本身已是低对比暗调晨雾，遮罩只做轻压：四周略收、上下渐隐融进黑底 */
   background:
-    radial-gradient(ellipse 90% 70% at 50% 45%, rgba(12, 16, 22, 0.3) 0%, rgba(6, 8, 12, 0.8) 100%),
-    linear-gradient(to bottom, rgba(10, 12, 16, 0.45) 0%, transparent 30%, transparent 70%, rgba(10, 12, 16, 0.7) 100%);
+    radial-gradient(ellipse 90% 70% at 50% 45%, rgba(12, 16, 22, 0.06) 0%, rgba(6, 8, 12, 0.55) 100%),
+    linear-gradient(to bottom, rgba(10, 12, 16, 0.28) 0%, transparent 30%, transparent 70%, rgba(10, 12, 16, 0.5) 100%);
 }
 
 /* ---------- 顶部导航：悬浮胶囊（古风毛玻璃试水层） ----------
@@ -371,16 +364,13 @@ watch(
   box-shadow: none;
   pointer-events: none;
 }
-/* 首页首屏顶部：胶囊完全隐去，让位给入场动画 */
-.navbar.nav-transparent .nav-inner {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
+/* 导航常驻：首页改为内容优先布局后不再有透明沉浸态，
+   原 .nav-transparent 覆盖规则已移除。 */
 .nav-inner {
-  max-width: 1200px;
+  /* 与首页内容列（1040px）对齐：1040 + 左右各 26px 内边距 = 1092。
+     这样胶囊体比内容列两侧各外扩 26px，logo 正好压在内容左边界上，
+     既有「悬浮胶囊」的层次，也不会出现导航和正文各走各的错位。 */
+  max-width: 1092px;
   margin: 10px auto 0;
   display: flex;
   align-items: center;
@@ -388,8 +378,9 @@ watch(
   padding: 8px 26px;
   border-radius: 999px;
   /* 底色比周围壁纸亮一档：暗背景下毛玻璃无法靠"通透"显形，
-     只能靠浅色胶囊体与黑底的明度差撑出轮廓 */
-  background: linear-gradient(to bottom, rgba(40, 44, 52, 0.82), rgba(24, 28, 34, 0.74));
+     只能靠浅色胶囊体与黑底的明度差撑出轮廓。
+     色相取暖墨（略偏棕），与首页的墨色玻璃卡片同一色系，避免冷蓝出戏 */
+  background: linear-gradient(to bottom, rgba(38, 34, 29, 0.84), rgba(24, 21, 18, 0.78));
   backdrop-filter: blur(18px) saturate(130%);
   -webkit-backdrop-filter: blur(18px) saturate(130%);
   border: 1px solid rgba(222, 217, 203, 0.24);
@@ -405,13 +396,16 @@ watch(
   gap: 12px;
   text-decoration: none;
 }
-.logo-seal {
-  font-size: 22px;
-  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+/* 阁楼标志：替代原方框「尘」字印章，无边框、可缩放 */
+.logo-mark {
+  font-size: 38px;
+  color: var(--c-gold);
+  filter: drop-shadow(0 0 8px rgba(232, 217, 181, 0.16));
+  transition: color 0.3s ease, filter 0.3s ease;
 }
-.nav-logo:hover .logo-seal {
-  border-color: var(--c-gold);
-  box-shadow: inset 0 0 14px rgba(232, 217, 181, 0.14), 0 0 22px rgba(232, 217, 181, 0.12);
+.nav-logo:hover .logo-mark {
+  color: #f4eeda;
+  filter: drop-shadow(0 0 14px rgba(232, 217, 181, 0.5));
 }
 .logo-text {
   display: flex;
@@ -567,6 +561,60 @@ watch(
 .nav-login:hover {
   background: rgba(232, 217, 181, 0.08);
   border-color: var(--c-gold);
+}
+
+/* ---------------- 窄屏导航 ----------------
+   原来没有任何移动端规则：胶囊内 logo 被挤成两行、四个链接竖着叠，
+   整个导航塌成一团。这里只做「收缩 + 允许横滑」，不引入新交互。
+   断点取 900 而不是 760：768px 的 iPad 竖屏按桌面规则走，四个链接
+   会被压成一字一行（首／页、照／片／墙），必须一起收进来。 */
+@media (max-width: 900px) {
+  .nav-inner {
+    margin: 8px 10px 0;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: 16px;
+  }
+  .nav-logo { flex: none; gap: 6px; min-height: 32px; align-items: center; }
+  .logo-mark { font-size: 22px; }
+  .logo-brush {
+    font-size: 14px;
+    letter-spacing: 2px;
+    white-space: nowrap;
+  }
+  .logo-sub { display: none; }
+  .nav-links {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .nav-links::-webkit-scrollbar { display: none; }
+  .nav-item {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    /* 原来只有 19px 高（11.5px 字 + 4px 上下内边距），远低于触屏
+       24×24 的最小点按面积，手机上很难点中。这里撑到 30px。 */
+    min-height: 30px;
+    padding: 6px 3px;
+    font-size: 11.5px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .nav-user { flex: none; gap: 7px; }
+  .nav-hello { display: none; }
+  .bell-btn { width: 30px; height: 30px; }
+  .bell-btn svg { width: 16px; height: 16px; }
+  .nav-logout { display: none; }
+}
+
+/* 超窄屏：只留印章标记、收起文字 logo。
+   390px 下「尘叙阁」三个字要占 46px，正好把「个人中心」挤出胶囊。 */
+@media (max-width: 480px) {
+  .logo-text { display: none; }
+  .logo-mark { font-size: 26px; }
 }
 
 /* 页面主体：为悬浮胶囊导航留出空间（胶囊 10px 上边距 + 约 56px 高） */
