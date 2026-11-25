@@ -8,6 +8,10 @@ import 'element-plus/theme-chalk/dark/css-vars.css'        // 暗色主题变量
 import axios from 'axios'                                    // 请求库
 import router from './router'                                // 路由配置
 import App from './App.vue'
+// 本地字体：由 scripts/fetch-fonts.mjs 生成（从 Google Fonts 抓下来自托管）。
+// 必须早于 style.css 引入 —— style.css 的 --font-body 依赖这里注册的字族，
+// 注册晚一步首屏会先用系统字体画一遍再跳字。
+import './fonts.css'
 import './style.css'                                         // 全局样式（暗色玄幻风格变量、字体等）
 
 // 暗色主题：Element Plus 需要 <html> 带 dark class（index.html 中已加）

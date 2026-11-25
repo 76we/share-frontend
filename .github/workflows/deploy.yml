@@ -1,0 +1,70 @@
+name: Deploy Frontend
+
+# 前端只需要「构建 + 覆盖静态文件」，不重启任何服务：
+# nginx 直接读磁盘上的 dist，rsync 落地即生效。
+# 与后端 workflow（share-system 仓库）用同一套 SSH Secrets，各配一次。
+
+on:
+  push:
+    branches: [main]
+    # 改文档 / 改 CI 本身不触发发版（workflow 文件改动用 workflow_dispatch 手动跑）
+    paths-ignore:
+      - '**.md'
+      - '.github/**'
+  workflow_dispatch:
+
+# 同一时间只允许一个部署，避免两次推送交叉覆盖 dist
+concurrency:
+  group: frontend-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # npm ci 严格按 package-lock.json 装，避免 CI 与本地依赖版本漂移
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # 构建产物自检：dist 里必须有 index.html，否则上传会把线上写成空目录
+      - name: Verify dist
+        run: test -f dist/index.html && du -sh dist
+
+      - name: Upload dist
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          # --delete 的作用范围只有远端 dist 目录，绝不碰 /opt/share 的其他内容
+          rsync -az --delete \
+            -e "ssh -p $SSH_PORT -o StrictHostKeyChecking=accept-new" \
+            dist/ "$SSH_USER@$SSH_HOST:/opt/share/frontend/dist/"
+
+      # 发布后抽查一次，确认新文件真的能被公网读到（拿不到域名时只看状态码）
+      - name: Smoke check
+        env:
+          BASE_URL: ${{ vars.SITE_URL }}
+        if: ${{ vars.SITE_URL != '' }}
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL/")
+          echo "GET $BASE_URL/ -> $code"
+          test "$code" = "200"

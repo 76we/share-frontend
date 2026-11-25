@@ -57,6 +57,7 @@
           class="mcard-img mcard-img--lead"
           :src="imgUrl(imgs[0])"
           :alt="m.title || '动态图片'"
+          :style="leadRatio"
           loading="lazy"
           @click.stop="preview(0)"
         />
@@ -69,6 +70,7 @@
           class="mcard-img"
           :src="imgUrl(img)"
           :alt="m.title || '动态图片'"
+          :style="imgs.length === 1 ? leadRatio : null"
           loading="lazy"
           @click.stop="preview(i)"
         />
@@ -120,6 +122,21 @@ const props = defineProps({
 const router = useRouter()
 const m = computed(() => props.moment || {})
 const imgs = computed(() => (Array.isArray(m.value.images) ? m.value.images : []))
+
+/* 与 imgs 同序的尺寸信息（后端 imageSizes）。升级前的老图 width/height 为 null */
+const sizes = computed(() => (Array.isArray(m.value.imageSizes) ? m.value.imageSizes : []))
+
+/* 单图按真实比例占位。
+   原先固定 16/8 会把竖图裁成一条横带，人脸和主体经常整块被切掉；
+   反过来完全不限也不行 —— 全景图会压成一条线、长截图会占满整屏。
+   所以按原比例算，再夹在 3:5 ~ 12:5 之间。
+   尺寸缺失（老图）时返回 null，让 CSS 的固定比例兜底，行为与升级前一致。 */
+const leadRatio = computed(() => {
+  const s = sizes.value[0]
+  if (!s || !s.width || !s.height) return null
+  const r = Math.max(0.6, Math.min(2.4, s.width / s.height))
+  return { aspectRatio: String(r) }
+})
 
 /* 首条带图才做「左文右图」；没有图时套这个骨架会在右侧留一块空白 */
 const isFeatured = computed(() => props.variant === 'feed' && props.featured && imgs.value.length > 0)

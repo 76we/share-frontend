@@ -10,13 +10,10 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- 兜底旧浏览器：没有 svg 图标时浏览器会退回 /favicon.ico -->
     <link rel="alternate icon" href="/favicon.svg" />
-    <!-- Google Fonts：站酷小薇（正文）+ 马善政毛笔（大标题 / Logo） -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=ZCOOL+XiaoWei&display=swap"
-      rel="stylesheet"
-    />
+    <!-- 字体已自托管：站酷小薇（正文）+ 马善政毛笔（大标题 / Logo）
+         由 src/fonts.css 引入，文件在 public/fonts/ 下（脚本：scripts/fetch-fonts.mjs）。
+         已彻底去掉外部字体 CDN —— 国内连不上，浏览器会一直等到超时才退化成系统字体。
+         这里不写 preload：构建后 CSS 文件名带 hash，写死的路径一定 404。 -->
   </head>
   <body>
     <!-- Vue 应用挂载点 -->
